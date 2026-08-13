@@ -1,0 +1,980 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NML CRM — Design System</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.7.0/dist/tabler-icons.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=IBM+Plex+Sans+Arabic:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --nml-red:#ed1c24;
+  --ink:#1c2536; --ink-2:#5a6478; --ink-3:#8a93a5; --ink-4:#a8b0bf; --ink-5:#c3c9d4;
+  --blue:#3f7fd6; --blue-d:#1d4f8c; --blue-bg:rgba(226,237,251,.85);
+  --green:#2f6b48; --green-d:#1d5637; --green-bg:rgba(217,240,226,.7);
+  --amber:#8a5a10; --amber-bg:rgba(253,234,204,.72);
+  --red:#a3302f; --red-d:#8c2322; --red-bg:rgba(250,214,214,.65);
+  --g-win:rgba(255,255,255,.38);
+  --g-panel:rgba(255,255,255,.55);
+  --g-card:rgba(255,255,255,.80);
+  --g-solid:rgba(255,255,255,.95);
+  --g-line:rgba(255,255,255,.75);
+  --blur:blur(26px) saturate(1.5);
+  --r-win:20px; --r-panel:18px; --r-card:15px; --r-row:12px; --r-pill:999px;
+  --shadow:0 16px 44px rgba(40,60,110,.14);
+  --wallpaper:linear-gradient(135deg,#bfd8f5 0%,#dfe3f7 28%,#f6d7e2 55%,#fcd9b4 80%,#f8e9d6 100%);
+}
+*{box-sizing:border-box}
+body{margin:0;background:#f4f5f8;color:var(--ink);font:400 15px/1.65 Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+:lang(ar),[dir=rtl]{font-family:'IBM Plex Sans Arabic',Inter,sans-serif}
+.mono{font-family:'JetBrains Mono',monospace}
+.doc{max-width:1240px;margin:0 auto;padding:40px 24px 100px}
+h1{font-size:30px;font-weight:500;margin:0 0 6px}
+h2{font-size:22px;font-weight:500;margin:56px 0 6px;padding-top:20px;border-top:1px solid #e2e5ea}
+h3{font-size:16px;font-weight:500;margin:32px 0 10px}
+p{margin:0 0 14px;color:#3d4657;max-width:78ch}
+.lede{font-size:17px;color:var(--ink-2)}
+code{font-family:'JetBrains Mono',monospace;font-size:13px;background:#eceff4;padding:1px 5px;border-radius:4px}
+pre{background:#1c2536;color:#e6ebf3;padding:18px 20px;border-radius:12px;overflow:auto;font:400 12.5px/1.7 'JetBrains Mono',monospace}
+.note{border-left:3px solid var(--nml-red);background:#fff;padding:12px 16px;border-radius:0 8px 8px 0;margin:0 0 16px}
+.note b{font-weight:500}
+ul{margin:0 0 16px;padding-left:20px;color:#3d4657}li{margin-bottom:6px}
+.cap{font-size:13px;color:var(--ink-3);margin:10px 0 26px}
+.swatches{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:18px}
+.sw{border-radius:10px;overflow:hidden;background:#fff;border:1px solid #e2e5ea}
+.sw i{display:block;height:52px}
+.sw span{display:block;padding:7px 10px;font-size:11.5px;color:var(--ink-2)}
+.sw b{display:block;font:500 12px 'JetBrains Mono',monospace;color:var(--ink)}
+.demo{background:#eef1f6;border-radius:14px;padding:20px;margin-bottom:20px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+
+/* ---------- SHELL ---------- */
+.wall{position:relative;overflow:hidden;border-radius:22px;padding:22px;background:var(--wallpaper)}
+.blob{position:absolute;border-radius:50%;pointer-events:none}
+.blob.a{top:-80px;right:-50px;width:320px;height:320px;background:#ff9a5b;opacity:.42;filter:blur(70px)}
+.blob.b{bottom:-100px;left:-60px;width:340px;height:340px;background:#5b9bf5;opacity:.32;filter:blur(80px)}
+.win{position:relative;display:flex;gap:14px;padding:14px;border-radius:var(--r-win);background:var(--g-win);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);border:1px solid rgba(255,255,255,.65);box-shadow:var(--shadow)}
+.win.solo{display:block}
+.nav{width:150px;flex:0 0 150px}
+.brand{display:flex;align-items:center;gap:9px;padding:2px 4px;margin-bottom:16px}
+.mark{width:28px;height:28px;border-radius:9px;background:var(--nml-red);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500}
+.nav-item{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:11px;color:var(--ink-2);font-size:13px;margin-bottom:3px}
+.nav-item i{font-size:17px}
+.nav-item.on{background:rgba(255,255,255,.85);border:1px solid rgba(255,255,255,.9);color:var(--ink);box-shadow:0 3px 10px rgba(40,60,110,.08)}
+.nav-item.on i{color:var(--nml-red)}
+.main{flex:1;min-width:0;display:flex;flex-direction:column;gap:12px}
+.top{display:flex;align-items:center;gap:10px}
+.search{flex:1;display:flex;align-items:center;gap:8px;padding:8px 15px;border-radius:var(--r-pill);background:rgba(255,255,255,.6);border:1px solid var(--g-line);color:var(--ink-3);font-size:13px}
+.user{display:flex;align-items:center;gap:7px;padding:4px 12px 4px 4px;border-radius:var(--r-pill);background:rgba(255,255,255,.6);border:1px solid var(--g-line);font-size:12.5px}
+.av{width:24px;height:24px;border-radius:50%;color:#fff;font-size:10.5px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+
+/* ---------- SURFACES ---------- */
+.tiles{display:grid;gap:10px}
+.tile{padding:12px 14px;border-radius:var(--r-card);background:var(--g-panel);border:1px solid var(--g-line)}
+.tile .k{font-size:11.5px;color:var(--ink-2);margin-bottom:4px}
+.tile .v{font-size:22px;font-weight:500}
+.tile.blue{background:var(--blue-bg)}.tile.blue .k,.tile.blue .v{color:var(--blue-d)}
+.tile.green{background:var(--green-bg)}.tile.green .k{color:var(--green)}.tile.green .v{color:var(--green-d)}
+.tile.amber{background:var(--amber-bg)}.tile.amber .k,.tile.amber .v{color:var(--amber)}
+.tile.red{background:var(--red-bg)}.tile.red .k{color:var(--red)}.tile.red .v{color:var(--red-d)}
+.panel{padding:14px;border-radius:var(--r-panel);background:var(--g-panel);border:1px solid var(--g-line)}
+.panel h4{margin:0 0 12px;font-size:14px;font-weight:500}
+.card{padding:12px;border-radius:var(--r-card);background:var(--g-card);border:1px solid rgba(255,255,255,.85)}
+
+/* ---------- CONTROLS ---------- */
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:5px 12px;border-radius:var(--r-pill);color:var(--ink-2);white-space:nowrap}
+.pill.on{background:var(--g-solid);color:var(--ink)}
+.pill.line{border:1px solid var(--g-line);background:rgba(255,255,255,.5)}
+.pill.dark{background:var(--ink);color:#fff}
+.pill.ghost{background:rgba(255,255,255,.85);color:var(--ink)}
+.badge{display:inline-block;font-size:11px;padding:3px 10px;border-radius:var(--r-pill);white-space:nowrap}
+.b-ghost{background:var(--g-solid);border:1px solid #dfe3ea;color:var(--ink-2)}
+.b-blue{background:var(--blue-bg);color:var(--blue-d)}
+.b-blue-solid{background:var(--blue);color:#fff}
+.b-green{background:var(--green-bg);color:var(--green-d)}
+.b-amber{background:var(--amber-bg);color:var(--amber)}
+.b-red{background:var(--red-bg);color:var(--red-d)}
+.seg{display:flex;gap:4px;padding:3px;border-radius:var(--r-pill);background:rgba(255,255,255,.55)}
+.seg span{flex:1;text-align:center;font-size:12px;padding:6px 0;border-radius:var(--r-pill);color:var(--ink-2)}
+.seg span.on{background:var(--g-solid);color:var(--ink);box-shadow:0 2px 8px rgba(40,60,110,.1)}
+.bulk{display:flex;align-items:center;gap:14px;padding:9px 14px;border-radius:13px;background:rgba(28,37,54,.92);margin-bottom:10px}
+.bulk .n{font-size:12px;color:#fff}
+.bulk a{font-size:12px;color:#cdd4e0;text-decoration:none}
+.bulk .x{margin-left:auto;font-size:12px;color:var(--ink-3)}
+.field{padding:10px 14px;border-radius:13px;background:rgba(255,255,255,.9);border:1px solid rgba(255,255,255,1);font-size:12.5px}
+.field.empty{color:var(--ink-4)}
+.field.err{background:rgba(250,214,214,.4);border-color:rgba(163,48,47,.3)}
+.lbl{font-size:11.5px;color:var(--ink-2);margin-bottom:5px}
+
+/* ---------- TABLE ---------- */
+.tbl{width:100%;border-collapse:separate;border-spacing:0 6px;font-size:13px;table-layout:fixed}
+.tbl th{text-align:left;padding:0 10px 3px;font-weight:400;font-size:11px;color:var(--ink-3)}
+.tbl td{padding:11px 10px;background:var(--g-card)}
+.tbl td:first-child{border-radius:var(--r-row) 0 0 var(--r-row)}
+.tbl td:last-child{border-radius:0 var(--r-row) var(--r-row) 0}
+.tbl tr.sel td{background:var(--blue-bg)}
+.tbl tr.warn td{background:var(--red-bg)}
+.tbl tr.good td{background:var(--green-bg)}
+.tbl .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sub{font-size:11px;color:var(--ink-3)}
+.num{text-align:right;font-family:'JetBrains Mono',monospace;color:var(--ink-2)}
+.chk{font-size:15px;color:var(--ink-4)}
+.chk.on{color:var(--blue)}
+
+/* ---------- STAGE RAIL ---------- */
+.rail{position:relative;padding:16px 14px 14px}
+.rail .line{position:absolute;top:24px;left:60px;right:60px;height:2px;background:rgba(120,135,160,.22)}
+.rail .fill{position:absolute;top:24px;left:60px;width:47%;height:2px;background:var(--blue)}
+.rail .steps{position:relative;display:flex}
+.rail .s{flex:1;text-align:center}
+.rail .dot{width:10px;height:10px;border-radius:50%;background:rgba(120,135,160,.3);margin:0 auto 9px}
+.rail .s.done .dot{background:var(--blue)}
+.rail .s.now .dot{width:14px;height:14px;background:#fff;border:3px solid var(--blue);margin:-2px auto 7px}
+.rail .n{font-size:11.5px;color:var(--ink-2)}
+.rail .s.now .n{color:var(--ink)}
+.rail .s.todo .n{color:var(--ink-4)}
+.rail .d{font-size:11px;color:var(--ink-4)}
+.rail .d.late{color:var(--red)}
+
+/* ---------- MISC ---------- */
+.kv{display:flex;justify-content:space-between;padding:5px 0;font-size:12.5px}
+.kv .k{color:var(--ink-3)}
+.drawer{width:360px;padding:18px;border-radius:var(--r-win);background:rgba(255,255,255,.5);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);border:1px solid rgba(255,255,255,.7);box-shadow:0 18px 48px rgba(40,60,110,.18)}
+.phone{width:330px;padding:18px;border-radius:26px;background:rgba(255,255,255,.55);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);border:1px solid rgba(255,255,255,.75);box-shadow:0 18px 48px rgba(40,60,110,.18)}
+.thumb{border-radius:11px;background:linear-gradient(140deg,#eef3fa,#e2e8f2);display:flex;align-items:center;justify-content:center;color:#9aa6ba}
+.kb{display:grid;gap:9px}
+.kcol .h{display:flex;justify-content:space-between;padding:0 5px 8px;font-size:11.5px;color:var(--ink-2)}
+.kcard{padding:10px;border-radius:14px;background:var(--g-card);margin-bottom:7px}
+.kcard .t{font-size:12px}
+.kcard .m{font-size:11px;color:var(--ink-3);margin:3px 0 7px}
+</style>
+</head>
+<body>
+<div class="doc">
+
+<h1>NML CRM — design system</h1>
+<p class="lede">Everything below is live HTML, not a picture. Screenshot any section at full width, or hand this file to Claude Code and it can read the real CSS.</p>
+
+<div class="note"><b>How to use this with Claude Code.</b> Copy the token block in section 2 into <code>app/globals.css</code>, copy the component classes from this file's <code>&lt;style&gt;</code> block as the starting point for your Tailwind theme, then build each screen against the rules in section 6. The screens here are static markup at desktop width — they show layout, hierarchy and state, not behaviour.</p>
+
+<h2>1. The idea in one paragraph</h2>
+<p>A gradient wallpaper sits behind everything. The entire application floats on it as one translucent, blurred pane. Panels nest inside that pane at lower opacity, and content cards sit inside those at higher opacity — so depth is expressed by how much white each layer holds, never by shadows or borders. Nothing has square corners. Nothing is grey-on-grey. Colour appears only where something has changed state or needs attention.</p>
+
+<h2>2. Tokens</h2>
+
+<h3>Brand and text</h3>
+<div class="swatches">
+  <div class="sw"><i style="background:#ed1c24"></i><span><b>#ED1C24</b>NML red — mark, active nav icon, nothing else</span></div>
+  <div class="sw"><i style="background:#1c2536"></i><span><b>#1C2536</b>Ink — headings, primary buttons, bulk bar</span></div>
+  <div class="sw"><i style="background:#5a6478"></i><span><b>#5A6478</b>Ink 2 — body, labels</span></div>
+  <div class="sw"><i style="background:#8a93a5"></i><span><b>#8A93A5</b>Ink 3 — metadata, column heads</span></div>
+  <div class="sw"><i style="background:#a8b0bf"></i><span><b>#A8B0BF</b>Ink 4 — placeholders, empty</span></div>
+</div>
+
+<h3>State</h3>
+<div class="swatches">
+  <div class="sw"><i style="background:#3f7fd6"></i><span><b>#3F7FD6</b>Blue — in progress, selection, links</span></div>
+  <div class="sw"><i style="background:#2f6b48"></i><span><b>#2F6B48</b>Green — converted, shelved, live</span></div>
+  <div class="sw"><i style="background:#8a5a10"></i><span><b>#8A5A10</b>Amber — on hold, approaching SLA</span></div>
+  <div class="sw"><i style="background:#a3302f"></i><span><b>#A3302F</b>Red — overdue, lost, rejected, blocked</span></div>
+</div>
+
+<div class="note"><b>Red is a state colour, not an action colour.</b> NML red appears in the logo mark and the active nav icon. Danger red is a different, darker red. Primary buttons are ink. If the primary button were red, a red "New merchant" would sit beside a red "14 overdue" and neither would register.</div>
+
+<h3>Copy this into globals.css</h3>
+<pre>:root{
+  --nml-red:#ed1c24;
+  --ink:#1c2536; --ink-2:#5a6478; --ink-3:#8a93a5; --ink-4:#a8b0bf;
+  --blue:#3f7fd6; --blue-d:#1d4f8c; --blue-bg:rgba(226,237,251,.85);
+  --green:#2f6b48; --green-d:#1d5637; --green-bg:rgba(217,240,226,.70);
+  --amber:#8a5a10; --amber-bg:rgba(253,234,204,.72);
+  --red:#a3302f;  --red-d:#8c2322;  --red-bg:rgba(250,214,214,.65);
+
+  --g-win:rgba(255,255,255,.38);    /* app window   */
+  --g-panel:rgba(255,255,255,.55);  /* section      */
+  --g-card:rgba(255,255,255,.80);   /* row / card   */
+  --g-solid:rgba(255,255,255,.95);  /* active chip  */
+  --g-line:rgba(255,255,255,.75);   /* every border */
+  --blur:blur(26px) saturate(1.5);
+
+  --r-win:20px; --r-panel:18px; --r-card:15px; --r-row:12px; --r-pill:999px;
+  --shadow:0 16px 44px rgba(40,60,110,.14);
+  --wallpaper:linear-gradient(135deg,#bfd8f5,#dfe3f7 28%,#f6d7e2 55%,#fcd9b4 80%,#f8e9d6);
+}</pre>
+
+<h3>Type</h3>
+<ul>
+  <li><b>Inter</b> — all Latin UI. 11 / 11.5 / 12 / 13 / 14 / 16 / 22px. Two weights only: 400 and 500.</li>
+  <li><b>IBM Plex Sans Arabic</b> — applied via <code>:lang(ar)</code> and on the public form. Arabic store names appear throughout the internal app, so this must load everywhere, not only on the form.</li>
+  <li><b>JetBrains Mono</b> — merchant codes, phone numbers, SKU counts, prices, IBANs. Anything that gets read aloud, compared down a column, or pasted into another system.</li>
+</ul>
+
+<h3>Depth and blur</h3>
+<p>Only two elements carry <code>backdrop-filter</code>: the app window and any drawer or modal. Panels and rows inside them use flat <code>rgba(255,255,255,x)</code>. Stacking real blur on fifty table rows costs GPU for no visual gain — the window behind them is already blurred.</p>
+
+<h2>3. Components</h2>
+
+<h3>Stage badges</h3>
+<p>Ten stages, four treatments. Early stages are outlined; mid-pipeline is blue; the conversion moment is solid; terminal states carry their own colour.</p>
+<div class="demo">
+  <span class="badge b-ghost">New</span>
+  <span class="badge b-ghost">Assigned</span>
+  <span class="badge b-ghost">Contacted</span>
+  <span class="badge b-blue">Interested</span>
+  <span class="badge b-blue">Form sent</span>
+  <span class="badge b-blue-solid">CTA done</span>
+  <span class="badge b-blue">Onboarding</span>
+  <span class="badge b-green">Active</span>
+  <span class="badge b-amber">On hold</span>
+  <span class="badge b-red">Lost</span>
+</div>
+
+<h3>Pills — every control is one</h3>
+<div class="demo" style="background:var(--wallpaper)">
+  <span class="pill on">Active tab</span>
+  <span class="pill">Inactive tab</span>
+  <span class="pill line">Filter <i class="ti ti-chevron-down"></i></span>
+  <span class="pill dark">Primary action</span>
+  <span class="pill ghost">Secondary action</span>
+  <span class="pill line"><i class="ti ti-filter"></i> 2</span>
+</div>
+
+<h3>Segmented control</h3>
+<div class="demo" style="background:var(--wallpaper);display:block">
+  <div class="seg" style="max-width:340px"><span>Manual</span><span class="on">Round-robin</span><span>By city</span></div>
+</div>
+
+<h3>Stat tiles — same component, four tints</h3>
+<div class="demo" style="background:var(--wallpaper);display:block">
+  <div class="tiles" style="grid-template-columns:repeat(4,1fr)">
+    <div class="tile"><div class="k">In pipeline</div><div class="v">1,284</div></div>
+    <div class="tile blue"><div class="k">Forms out</div><div class="v">96</div></div>
+    <div class="tile green"><div class="k">CTA this month</div><div class="v">148</div></div>
+    <div class="tile red"><div class="k">Overdue</div><div class="v">14</div></div>
+  </div>
+</div>
+<p class="cap">Tiles appear at the top of every list screen in the same position, so the header height never changes between pages. Only the numbers differ.</p>
+
+<h3>Bulk action bar</h3>
+<div class="demo" style="background:var(--wallpaper);display:block">
+  <div class="bulk"><span class="n">3 selected</span><a href="#">Assign</a><a href="#">Tag</a><a href="#">Priority</a><span class="x">Clear</span></div>
+</div>
+<p class="cap">The one element that breaks the glass palette. It appears above content and disappears again — a translucent bar over translucent rows would read as decoration rather than a mode change.</p>
+
+<h3>Stage rail — the signature element</h3>
+<div class="demo" style="background:var(--wallpaper);display:block">
+  <div class="panel rail">
+    <div class="line"></div><div class="fill"></div>
+    <div class="steps">
+      <div class="s done"><div class="dot"></div><div class="n">New</div><div class="d">28 Jul</div></div>
+      <div class="s done"><div class="dot"></div><div class="n">Assigned</div><div class="d">29 Jul</div></div>
+      <div class="s done"><div class="dot"></div><div class="n">Contacted</div><div class="d">1 Aug</div></div>
+      <div class="s done"><div class="dot"></div><div class="n">Interested</div><div class="d">5 Aug</div></div>
+      <div class="s now"><div class="dot"></div><div class="n">Form sent</div><div class="d late">4d here</div></div>
+      <div class="s todo"><div class="dot"></div><div class="n">CTA done</div><div class="d">—</div></div>
+      <div class="s todo"><div class="dot"></div><div class="n">Onboarding</div><div class="d">—</div></div>
+      <div class="s todo"><div class="dot"></div><div class="n">Active</div><div class="d">—</div></div>
+    </div>
+  </div>
+</div>
+<p class="cap">Appears once, on the merchant record. Real dates under every node; the counter on the current node turns red past the stage SLA. This is the only place in the app that gets a bold treatment — everything else stays quiet so this reads.</p>
+
+<h3>Table rows</h3>
+<div class="demo" style="background:var(--wallpaper);display:block">
+  <table class="tbl">
+    <colgroup><col style="width:34px"><col><col style="width:120px"><col style="width:130px"></colgroup>
+    <thead><tr><th></th><th>Store</th><th>Stage</th><th>Next action</th></tr></thead>
+    <tbody>
+      <tr class="sel"><td><i class="ti ti-square-check chk on"></i></td><td><div class="t">Selected row</div></td><td><span class="badge b-blue">Form sent</span></td><td><span class="badge b-red">2d late</span></td></tr>
+      <tr><td><i class="ti ti-square chk"></i></td><td><div class="t">Default row</div></td><td><span class="badge b-ghost">Contacted</span></td><td>Today 4pm</td></tr>
+      <tr class="warn"><td><i class="ti ti-square chk"></i></td><td><div class="t">Needs attention</div></td><td><span class="badge b-amber">On hold</span></td><td>15 Sep</td></tr>
+      <tr class="good"><td><i class="ti ti-square chk"></i></td><td><div class="t">Ready to advance</div></td><td><span class="badge b-green">Active</span></td><td>—</td></tr>
+    </tbody>
+  </table>
+</div>
+<p class="cap">Rows are floating cards with gaps, never lines separated by rules. Row tint carries meaning: blue = selected, red = overdue or blocked, green = ready for the next step.</p>
+
+<h2>4. Layout rules</h2>
+<ul>
+  <li><b>Nav is role-filtered.</b> An acquisition specialist sees four items and his home is called "My day". An admin sees all nine. Showing people locked doors every morning is friction with no upside.</li>
+  <li><b>Order on every list screen:</b> search bar → stat tiles → panel containing tabs, filters, bulk bar, table. Never varies.</li>
+  <li><b>Filters collapse into one pill</b> (<code>Filters · 2</code>) rather than a row of chips, so header height is constant across pages.</li>
+  <li><b>One primary action per screen</b>, ink-filled, top right of the panel.</li>
+  <li><b>Everything is logical-property based</b> (<code>margin-inline-start</code>, not <code>margin-left</code>) so the RTL flip on the public form costs nothing.</li>
+</ul>
+
+<h2>5. Writing rules</h2>
+<ul>
+  <li>Sentence case everywhere. Never Title Case.</li>
+  <li>Buttons name their outcome and carry the count: <b>Import 1,842 leads</b>, not <b>Submit</b>.</li>
+  <li>Empty states name the next action: "The pool is empty. Import leads to get started."</li>
+  <li>Errors say what happened and what to do, in the interface's voice. Database rule violations surface verbatim — if the trigger says "assign an account manager first", that's the toast.</li>
+  <li>Row subtitles explain <i>why</i> something is in a queue — "form sent 4 days ago, no reply" — never just a date. A specialist with 142 merchants can't remember.</li>
+</ul>
+
+<h2>6. Screens</h2>
+
+<h3>6.1 Merchants — the master table</h3>
+<div class="wall"><div class="blob a"></div><div class="blob b"></div>
+<div class="win">
+  <div class="nav">
+    <div class="brand"><div class="mark">N</div><span style="font-size:14px">NML</span></div>
+    <div class="nav-item"><i class="ti ti-layout-grid"></i>Dashboard</div>
+    <div class="nav-item"><i class="ti ti-inbox"></i>Leads</div>
+    <div class="nav-item on"><i class="ti ti-building-store"></i>Merchants</div>
+    <div class="nav-item"><i class="ti ti-layout-columns"></i>Pipeline</div>
+    <div class="nav-item"><i class="ti ti-checklist"></i>Onboarding</div>
+    <div class="nav-item"><i class="ti ti-package"></i>Products</div>
+    <div class="nav-item"><i class="ti ti-radar"></i>Prospecting</div>
+    <div class="nav-item"><i class="ti ti-chart-bar"></i>Reports</div>
+    <div class="nav-item"><i class="ti ti-settings"></i>Settings</div>
+  </div>
+  <div class="main">
+    <div class="top">
+      <div class="search"><i class="ti ti-search"></i>Search merchants, phone, SKU</div>
+      <i class="ti ti-bell" style="font-size:19px;color:var(--ink-2)"></i>
+      <div class="user"><div class="av" style="background:#ed1c24">HA</div>Hamdy</div>
+    </div>
+    <div class="tiles" style="grid-template-columns:repeat(4,1fr)">
+      <div class="tile"><div class="k">In pipeline</div><div class="v">1,284</div></div>
+      <div class="tile blue"><div class="k">Forms pending</div><div class="v">96</div></div>
+      <div class="tile green"><div class="k">CTA this month</div><div class="v">148</div></div>
+      <div class="tile red"><div class="k">Overdue</div><div class="v">14</div></div>
+    </div>
+    <div class="panel">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <span style="font-size:15px">Merchants <span class="sub">4,812</span></span>
+        <div style="display:flex;gap:8px"><span class="pill line">Export</span><span class="pill dark"><i class="ti ti-plus"></i>New merchant</span></div>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:12px;align-items:center">
+        <span class="pill on">All</span><span class="pill">Mine</span>
+        <span class="pill">Needs action <span style="color:var(--red)">14</span></span>
+        <span class="pill">Form pending</span><span class="pill">Onboarding</span>
+        <span class="pill line" style="margin-left:auto"><i class="ti ti-filter"></i>Filters · 2</span>
+      </div>
+      <div class="bulk"><span class="n">3 selected</span><a href="#">Assign</a><a href="#">Priority</a><a href="#">Tag</a><a href="#">Export</a><span class="x">Clear</span></div>
+      <table class="tbl">
+        <colgroup><col style="width:34px"><col><col style="width:150px"><col style="width:90px"><col style="width:110px"><col style="width:100px"><col style="width:60px"><col style="width:110px"></colgroup>
+        <thead><tr><th></th><th>Store</th><th>Phone</th><th>City</th><th>Stage</th><th>Owner</th><th>SKUs</th><th>Next action</th></tr></thead>
+        <tbody>
+          <tr class="sel"><td><i class="ti ti-square-check chk on"></i></td>
+            <td><div class="t">متجر نوران</div><div class="sub mono">NML-01042</div></td>
+            <td class="mono" style="font-size:12px;color:var(--ink-2)">966551234567 <i class="ti ti-brand-whatsapp" style="color:var(--green)"></i></td>
+            <td style="color:var(--ink-2)">Riyadh</td><td><span class="badge b-blue">Form sent</span></td>
+            <td style="color:var(--ink-2)"><div class="t">Ahmed S.</div></td><td class="num">218</td>
+            <td><span class="badge b-red">2d late</span></td></tr>
+          <tr class="sel"><td><i class="ti ti-square-check chk on"></i></td>
+            <td><div class="t">Layali Perfumes</div><div class="sub mono">NML-01039</div></td>
+            <td class="mono" style="font-size:12px;color:var(--ink-2)">966553311220 <i class="ti ti-brand-whatsapp" style="color:var(--green)"></i></td>
+            <td style="color:var(--ink-2)">Jeddah</td><td><span class="badge b-ghost">Contacted</span></td>
+            <td style="color:var(--ink-2)"><div class="t">Ahmed S.</div></td><td class="num">64</td>
+            <td style="color:var(--ink-2)">Today 4pm</td></tr>
+          <tr class="sel"><td><i class="ti ti-square-check chk on"></i></td>
+            <td><div class="t">بيت التمر</div><div class="sub mono">NML-01031</div></td>
+            <td class="mono" style="font-size:12px;color:var(--ink-2)">966509876543 <i class="ti ti-brand-whatsapp" style="color:var(--green)"></i></td>
+            <td style="color:var(--ink-2)">Buraidah</td><td><span class="badge b-ghost">Assigned</span></td>
+            <td style="color:var(--ink-2)"><div class="t">Sara M.</div></td><td class="num">37</td>
+            <td style="color:var(--ink-4)">Not set</td></tr>
+          <tr><td><i class="ti ti-square chk"></i></td>
+            <td><div class="t">Nabt Store</div><div class="sub mono">NML-01028</div></td>
+            <td class="mono" style="font-size:12px;color:var(--ink-2)">966554412008 <i class="ti ti-brand-whatsapp" style="color:var(--green)"></i></td>
+            <td style="color:var(--ink-2)">Riyadh</td><td><span class="badge b-blue-solid">CTA done</span></td>
+            <td style="color:var(--ink-2)"><div class="t">Khaled R.</div></td><td class="num">412</td>
+            <td style="color:var(--ink-2)">Assign AM</td></tr>
+          <tr><td><i class="ti ti-square chk"></i></td>
+            <td><div class="t">Zahra Kids</div><div class="sub mono">NML-00996</div></td>
+            <td class="mono" style="font-size:12px;color:var(--ink-2)">966566120934 <i class="ti ti-brand-whatsapp" style="color:var(--green)"></i></td>
+            <td style="color:var(--ink-2)">Dammam</td><td><span class="badge b-amber">On hold</span></td>
+            <td style="color:var(--ink-2)"><div class="t">Sara M.</div></td><td class="num">89</td>
+            <td style="color:var(--ink-2)">15 Sep</td></tr>
+          <tr><td><i class="ti ti-square chk"></i></td>
+            <td><div class="t">Oud Al Sharq</div><div class="sub mono">NML-00981</div></td>
+            <td class="mono" style="font-size:12px;color:var(--ink-2)">966501199234 <i class="ti ti-brand-whatsapp" style="color:var(--green)"></i></td>
+            <td style="color:var(--ink-2)">Makkah</td><td><span class="badge b-green">Active</span></td>
+            <td style="color:var(--ink-2)"><div class="t">Noura A.</div></td><td class="num">1,204</td>
+            <td style="color:var(--ink-4)">—</td></tr>
+          <tr><td><i class="ti ti-square chk"></i></td>
+            <td><div class="t">Rukn Al Hadaya</div><div class="sub mono">NML-00974</div></td>
+            <td class="mono" style="font-size:12px;color:var(--ink-2)">966533440021 <i class="ti ti-brand-whatsapp" style="color:var(--green)"></i></td>
+            <td style="color:var(--ink-2)">Tabuk</td><td><span class="badge b-red">Lost</span></td>
+            <td style="color:var(--ink-2)"><div class="t">Khaled R.</div></td><td class="num">22</td>
+            <td style="color:var(--ink-4)">—</td></tr>
+        </tbody>
+      </table>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding-top:10px;margin-top:6px;border-top:1px solid rgba(255,255,255,.7)">
+        <span class="sub">1–50 of 4,812</span>
+        <div style="display:flex;gap:7px"><span class="pill line"><i class="ti ti-chevron-left"></i></span><span class="pill line"><i class="ti ti-chevron-right"></i></span></div>
+      </div>
+    </div>
+  </div>
+</div></div>
+<p class="cap"><b>Rules.</b> Server-side pagination and filtering — must stay usable at 50k rows. Saved views are filter presets, not separate pages. Next action is the only column that turns red. Phone is click-to-call with a WhatsApp deep link beside it.</p>
+
+<h3>6.2 Merchant record</h3>
+<div class="wall"><div class="blob a"></div><div class="blob b"></div>
+<div class="win solo">
+  <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:16px">
+    <div style="width:42px;height:42px;border-radius:13px;background:rgba(255,255,255,.85);border:1px solid rgba(255,255,255,.9);display:flex;align-items:center;justify-content:center;color:var(--nml-red);font-size:20px"><i class="ti ti-building-store"></i></div>
+    <div style="flex:1;min-width:0">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:18px">متجر نوران</span>
+        <span class="sub mono">NML-01042</span>
+        <i class="ti ti-external-link" style="font-size:15px;color:var(--ink-3)"></i>
+      </div>
+      <div style="display:flex;align-items:center;gap:9px;margin-top:6px;font-size:12.5px;color:var(--ink-2)">
+        <span class="badge b-blue">Form sent</span><span class="badge b-ghost">High priority</span>
+        <span>Riyadh</span><span style="color:var(--ink-5)">·</span><span>Perfumes</span>
+        <span style="color:var(--ink-5)">·</span><span>Ahmed Salem</span>
+      </div>
+    </div>
+    <div style="display:flex;gap:7px">
+      <span class="pill ghost"><i class="ti ti-brand-whatsapp"></i></span>
+      <span class="pill ghost"><i class="ti ti-phone"></i></span>
+      <span class="pill ghost">Send form</span>
+      <span class="pill dark">Log activity</span>
+      <span class="pill ghost"><i class="ti ti-dots"></i></span>
+    </div>
+  </div>
+
+  <div class="panel rail" style="margin-bottom:14px">
+    <div class="line"></div><div class="fill"></div>
+    <div class="steps">
+      <div class="s done"><div class="dot"></div><div class="n">New</div><div class="d">28 Jul</div></div>
+      <div class="s done"><div class="dot"></div><div class="n">Assigned</div><div class="d">29 Jul</div></div>
+      <div class="s done"><div class="dot"></div><div class="n">Contacted</div><div class="d">1 Aug</div></div>
+      <div class="s done"><div class="dot"></div><div class="n">Interested</div><div class="d">5 Aug</div></div>
+      <div class="s now"><div class="dot"></div><div class="n">Form sent</div><div class="d late">4d here</div></div>
+      <div class="s todo"><div class="dot"></div><div class="n">CTA done</div><div class="d">—</div></div>
+      <div class="s todo"><div class="dot"></div><div class="n">Onboarding</div><div class="d">—</div></div>
+      <div class="s todo"><div class="dot"></div><div class="n">Active</div><div class="d">—</div></div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:6px;margin-bottom:14px">
+    <span class="pill on">Overview</span><span class="pill">Activity</span>
+    <span class="pill">Products <span style="color:var(--ink-4)">218</span></span>
+    <span class="pill">Form</span>
+    <span class="pill" style="color:var(--ink-4)"><i class="ti ti-lock"></i>Onboarding</span>
+    <span class="pill">Tasks</span><span class="pill">Files</span>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+    <div class="panel">
+      <div style="display:flex;justify-content:space-between;margin-bottom:10px"><span style="font-size:13px">Contact</span><i class="ti ti-edit" style="color:var(--ink-3)"></i></div>
+      <div class="kv"><span class="k">Owner</span><span>نوران العتيبي</span></div>
+      <div class="kv"><span class="k">Phone</span><span class="mono">966551234567</span></div>
+      <div class="kv"><span class="k">City</span><span>Riyadh</span></div>
+      <div class="kv"><span class="k">Salla ID</span><span class="mono">1432657603</span></div>
+      <div class="kv"><span class="k">CR number</span><span style="color:var(--ink-4)">Awaiting form</span></div>
+      <div class="kv"><span class="k">IBAN</span><span style="color:var(--ink-4)">Awaiting form</span></div>
+      <div class="kv"><span class="k">Source</span><span>Salla · Batch 14</span></div>
+      <div style="display:flex;gap:6px;margin-top:10px"><span class="badge b-ghost">high-value</span><span class="badge b-ghost">perfumes</span></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div class="panel" style="background:var(--red-bg)">
+        <div style="font-size:11.5px;color:var(--red);margin-bottom:5px">Next action · 2 days late</div>
+        <div style="font-size:13px;margin-bottom:11px">Follow up on the partnership form</div>
+        <div style="display:flex;gap:7px"><span class="pill dark">Resend form</span><span class="pill ghost">Reschedule</span></div>
+      </div>
+      <div class="panel">
+        <h4>Open tasks</h4>
+        <div class="kv"><span>Confirm warehouse address</span><span class="k">Tomorrow</span></div>
+        <div class="kv"><span>Send price list</span><span class="k">17 Aug</span></div>
+      </div>
+    </div>
+    <div class="panel">
+      <h4>Recent activity</h4>
+      <div style="display:flex;gap:10px;padding-bottom:11px">
+        <i class="ti ti-file-text" style="color:var(--blue)"></i>
+        <div><div style="font-size:12.5px">Partnership form sent</div><div class="sub">Ahmed S. · 9 Aug</div></div>
+      </div>
+      <div style="display:flex;gap:10px;padding-bottom:11px">
+        <i class="ti ti-phone" style="color:var(--green)"></i>
+        <div><div style="font-size:12.5px">Call · agreed to partner</div><div class="sub">Ahmed S. · 5 Aug</div></div>
+      </div>
+      <div style="display:flex;gap:10px">
+        <i class="ti ti-brand-whatsapp" style="color:var(--ink-3)"></i>
+        <div><div style="font-size:12.5px">Sent NML intro deck</div><div class="sub">Ahmed S. · 1 Aug</div></div>
+      </div>
+    </div>
+  </div>
+</div></div>
+<p class="cap"><b>Rules.</b> Onboarding tab is visibly locked before CTA, never hidden. Fields the merchant fills in the public form read "Awaiting form", never blank. Next action is the only tinted panel and it changes colour with urgency. System events appear in the activity timeline in a muted style and cannot be edited.</p>
+
+<h3>6.3 Leads pool and bulk assign</h3>
+<div class="wall"><div class="blob a"></div><div class="blob b"></div>
+<div class="win">
+  <div class="nav">
+    <div class="brand"><div class="mark">N</div><span style="font-size:14px">NML</span></div>
+    <div class="nav-item"><i class="ti ti-layout-grid"></i>Dashboard</div>
+    <div class="nav-item on"><i class="ti ti-inbox"></i>Leads</div>
+    <div class="nav-item"><i class="ti ti-building-store"></i>Merchants</div>
+    <div class="nav-item"><i class="ti ti-layout-columns"></i>Pipeline</div>
+    <div class="nav-item"><i class="ti ti-package"></i>Products</div>
+  </div>
+  <div class="main">
+    <div class="tiles" style="grid-template-columns:repeat(3,1fr)">
+      <div class="tile"><div class="k">Unassigned</div><div class="v">1,284</div></div>
+      <div class="tile blue"><div class="k">Added this week</div><div class="v">640</div></div>
+      <div class="tile amber"><div class="k">Duplicates skipped</div><div class="v">73</div></div>
+    </div>
+    <div style="display:flex;gap:12px">
+      <div class="panel" style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <span style="font-size:15px">Lead pool <span class="sub">1,284</span></span>
+          <span class="pill dark"><i class="ti ti-upload"></i>Import leads</span>
+        </div>
+        <div class="bulk"><span class="n">3 selected</span><a href="#">Assign</a><a href="#">Tag</a><span class="x">Clear</span></div>
+        <table class="tbl">
+          <colgroup><col style="width:34px"><col><col style="width:90px"><col style="width:110px"><col style="width:60px"></colgroup>
+          <thead><tr><th></th><th>Store</th><th>City</th><th>Category</th><th>SKUs</th></tr></thead>
+          <tbody>
+            <tr class="sel"><td><i class="ti ti-square-check chk on"></i></td><td><div class="t">بيت العطور</div><div class="sub">baytaloud.sa</div></td><td style="color:var(--ink-2)">Riyadh</td><td style="color:var(--ink-2)">Perfumes</td><td class="num">312</td></tr>
+            <tr class="sel"><td><i class="ti ti-square-check chk on"></i></td><td><div class="t">Hala Home</div><div class="sub">halahome.store</div></td><td style="color:var(--ink-2)">Jeddah</td><td style="color:var(--ink-2)">Home</td><td class="num">148</td></tr>
+            <tr class="sel"><td><i class="ti ti-square-check chk on"></i></td><td><div class="t">مؤسسة الركن</div><div class="sub">alrukn.sa</div></td><td style="color:var(--ink-2)">Dammam</td><td style="color:var(--ink-2)">Appliances</td><td class="num">96</td></tr>
+            <tr><td><i class="ti ti-square chk"></i></td><td><div class="t">Nadia Kitchen</div><div class="sub">nadiakitchen.sa</div></td><td style="color:var(--ink-2)">Riyadh</td><td style="color:var(--ink-2)">Kitchen</td><td class="num">54</td></tr>
+            <tr><td><i class="ti ti-square chk"></i></td><td><div class="t">متجر التميز</div><div class="sub">altamayoz.sa</div></td><td style="color:var(--ink-2)">Makkah</td><td style="color:var(--ink-2)">Electronics</td><td class="num">431</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="drawer" style="width:300px;flex:0 0 300px">
+        <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:15px">Assign 3 leads</span><i class="ti ti-x" style="color:var(--ink-3)"></i></div>
+        <div class="sub" style="margin:4px 0 14px">They move to Assigned and appear in the owner's pipeline.</div>
+        <div class="seg" style="margin-bottom:14px"><span>Manual</span><span class="on">Round-robin</span><span>By city</span></div>
+        <div class="sub" style="margin-bottom:8px">Split across</div>
+        <div class="card" style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+          <i class="ti ti-square-check chk on"></i><div class="av" style="background:#e2edfb;color:#1d4f8c">AS</div>
+          <div style="flex:1;min-width:0"><div style="font-size:12.5px">Ahmed Salem</div><div class="sub">142 open · Riyadh</div></div>
+          <span class="badge b-blue">+1</span>
+        </div>
+        <div class="card" style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+          <i class="ti ti-square-check chk on"></i><div class="av" style="background:#f6ddea;color:#8c3563">SM</div>
+          <div style="flex:1;min-width:0"><div style="font-size:12.5px">Sara Mansour</div><div class="sub">88 open · Jeddah</div></div>
+          <span class="badge b-blue">+1</span>
+        </div>
+        <div class="card" style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+          <i class="ti ti-square-check chk on"></i><div class="av" style="background:#d9f0e2;color:#1d5637">KR</div>
+          <div style="flex:1;min-width:0"><div style="font-size:12.5px">Khaled Rashed</div><div class="sub">96 open · Dammam</div></div>
+          <span class="badge b-blue">+1</span>
+        </div>
+        <div class="card" style="display:flex;align-items:center;gap:10px;margin-bottom:14px;background:rgba(255,255,255,.45)">
+          <i class="ti ti-square chk"></i><div class="av" style="background:rgba(255,255,255,.9);color:var(--ink-3)">NA</div>
+          <div style="flex:1;min-width:0"><div style="font-size:12.5px;color:var(--ink-2)">Noura Alharbi</div><div class="sub" style="color:var(--red)">231 open · at capacity</div></div>
+        </div>
+        <div style="padding:11px 13px;border-radius:13px;background:var(--blue-bg);margin-bottom:14px">
+          <div style="font-size:11.5px;color:var(--blue-d);margin-bottom:3px">Preview</div>
+          <div style="font-size:12.5px">Ahmed 1 · Sara 1 · Khaled 1</div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <span class="pill ghost" style="flex:1;justify-content:center">Cancel</span>
+          <span class="pill dark" style="flex:2;justify-content:center">Assign 3 leads</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div></div>
+<p class="cap"><b>Rules.</b> Current open-merchant load shows next to every specialist — round-robin without it is a blind split. Capacity is a soft block: flagged and unchecked, but overridable. The preview sits above the button, never after the click.</p>
+
+<h3>6.4 Import wizard — the review step</h3>
+<div class="wall" style="display:flex;justify-content:center"><div class="blob a"></div><div class="blob b"></div>
+<div class="drawer" style="width:520px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><span style="font-size:16px">Import leads</span><i class="ti ti-x" style="color:var(--ink-3)"></i></div>
+  <div style="display:flex;gap:7px;margin-bottom:15px">
+    <span class="badge b-green"><i class="ti ti-check"></i> Upload</span>
+    <span class="badge b-green"><i class="ti ti-check"></i> Map columns</span>
+    <span class="badge" style="background:var(--ink);color:#fff">Review</span>
+    <span class="badge" style="color:var(--ink-3)">Done</span>
+  </div>
+  <div class="tiles" style="grid-template-columns:repeat(3,1fr);margin-bottom:15px">
+    <div class="tile green"><div class="k">New</div><div class="v">1,842</div></div>
+    <div class="tile amber"><div class="k">Already here</div><div class="v">264</div></div>
+    <div class="tile red"><div class="k">Can't import</div><div class="v">34</div></div>
+  </div>
+  <div class="sub" style="margin-bottom:8px">What to do with the 264 that already exist</div>
+  <div class="card" style="display:flex;gap:10px;margin-bottom:6px;background:var(--g-solid)">
+    <i class="ti ti-circle-check" style="color:var(--blue);font-size:17px"></i>
+    <div><div style="font-size:13px">Skip them</div><div class="sub">Existing records are left exactly as they are.</div></div>
+  </div>
+  <div class="card" style="display:flex;gap:10px;margin-bottom:15px;background:rgba(255,255,255,.5)">
+    <i class="ti ti-circle" style="color:var(--ink-4);font-size:17px"></i>
+    <div><div style="font-size:13px;color:var(--ink-2)">Fill in blanks only</div><div class="sub">Adds missing emails or cities. Never overwrites what's there.</div></div>
+  </div>
+  <div class="panel" style="margin-bottom:15px">
+    <div style="display:flex;justify-content:space-between;margin-bottom:9px"><span style="font-size:12.5px">Matched to existing merchants</span><span style="font-size:12px;color:var(--blue)">See all 264</span></div>
+    <div class="kv"><span>بيت العطور</span><span><span class="badge b-blue">Salla ID</span> <span class="sub mono">NML-01042</span></span></div>
+    <div class="kv"><span>Hala Home</span><span><span class="badge b-blue">Store URL</span> <span class="sub mono">NML-00874</span></span></div>
+    <div class="kv"><span>مؤسسة الركن</span><span><span class="badge b-blue">Phone</span> <span class="sub mono">NML-00619</span></span></div>
+  </div>
+  <div style="display:flex;align-items:center;gap:10px;padding:11px 14px;border-radius:13px;background:var(--red-bg);margin-bottom:16px">
+    <i class="ti ti-alert-triangle" style="color:var(--red)"></i>
+    <span style="flex:1;font-size:12.5px;color:var(--red-d)">34 rows have no phone or a broken number</span>
+    <span class="pill ghost" style="color:var(--red-d)">Download</span>
+  </div>
+  <div style="display:flex;gap:8px;justify-content:flex-end">
+    <span class="pill ghost">Back</span><span class="pill dark">Import 1,842 leads</span>
+  </div>
+</div></div>
+<p class="cap"><b>Rules.</b> Duplicates name the merchant they matched and the field that matched — Salla ID, then store URL, then phone, in descending confidence. "Fill in blanks only" never overwrites existing values. Invalid rows download as a file to fix and re-upload. The button carries the count.</p>
+
+<h3>6.5 Products — the shelf queue</h3>
+<div class="wall"><div class="blob a"></div><div class="blob b"></div>
+<div class="win">
+  <div class="nav">
+    <div class="brand"><div class="mark">N</div><span style="font-size:14px">NML</span></div>
+    <div class="nav-item"><i class="ti ti-layout-grid"></i>Dashboard</div>
+    <div class="nav-item"><i class="ti ti-building-store"></i>Merchants</div>
+    <div class="nav-item on"><i class="ti ti-package"></i>Products</div>
+    <div class="nav-item"><i class="ti ti-chart-bar"></i>Reports</div>
+  </div>
+  <div class="main">
+    <div class="tiles" style="grid-template-columns:repeat(3,1fr)">
+      <div class="tile blue"><div class="k">Ready for shelf</div><div class="v">3,842</div></div>
+      <div class="tile amber"><div class="k">In review</div><div class="v">214</div></div>
+      <div class="tile green"><div class="k">Shelved this week</div><div class="v">1,106</div></div>
+    </div>
+    <div style="display:flex;gap:12px">
+      <div class="panel" style="flex:1;min-width:0">
+        <div style="display:flex;gap:6px;margin-bottom:12px;align-items:center">
+          <span class="pill on">Ready for shelf</span><span class="pill">In review</span><span class="pill">Shelved</span><span class="pill">Rejected</span>
+          <span class="pill line" style="margin-left:auto"><i class="ti ti-filter"></i>1</span>
+        </div>
+        <div class="bulk"><span class="n">2 selected</span><a href="#">Shelve</a><a href="#">Send to review</a><a href="#">Reject</a><span class="x">Clear</span></div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+          <div class="card" style="background:var(--blue-bg)"><div class="thumb" style="height:78px;margin-bottom:8px;position:relative"><i class="ti ti-air-conditioning" style="font-size:28px"></i><i class="ti ti-square-check chk on" style="position:absolute;top:6px;left:6px"></i></div><div class="t" style="font-size:12.5px">مكيف سبليت 18000</div><div class="sub t">بيت العطور</div><div class="mono" style="font-size:12.5px;margin-top:5px">1,890 <span class="sub">SAR</span></div></div>
+          <div class="card" style="background:var(--blue-bg)"><div class="thumb" style="height:78px;margin-bottom:8px;position:relative"><i class="ti ti-wash-machine" style="font-size:28px"></i><i class="ti ti-square-check chk on" style="position:absolute;top:6px;left:6px"></i></div><div class="t" style="font-size:12.5px">غسالة أوتوماتيك</div><div class="sub t">Hala Home</div><div class="mono" style="font-size:12.5px;margin-top:5px">2,450 <span class="sub">SAR</span></div></div>
+          <div class="card"><div class="thumb" style="height:78px;margin-bottom:8px;position:relative"><i class="ti ti-device-tv" style="font-size:28px"></i><i class="ti ti-square chk" style="position:absolute;top:6px;left:6px"></i></div><div class="t" style="font-size:12.5px">شاشة 55 بوصة</div><div class="sub t">متجر التميز</div><div class="mono" style="font-size:12.5px;margin-top:5px">3,199 <span class="sub">SAR</span></div></div>
+          <div class="card"><div class="thumb" style="height:78px;margin-bottom:8px;position:relative"><i class="ti ti-fridge" style="font-size:28px"></i><i class="ti ti-square chk" style="position:absolute;top:6px;left:6px"></i><span class="badge b-red" style="position:absolute;bottom:6px;right:6px;font-size:10px">No image</span></div><div class="t" style="font-size:12.5px">ثلاجة بابين</div><div class="sub t">مؤسسة الركن</div><div class="mono" style="font-size:12.5px;margin-top:5px">4,750 <span class="sub">SAR</span></div></div>
+        </div>
+      </div>
+      <div class="drawer" style="width:300px;flex:0 0 300px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:13px">
+          <div style="display:flex;gap:7px;align-items:center">
+            <span class="pill ghost"><i class="ti ti-chevron-up"></i></span><span class="pill ghost"><i class="ti ti-chevron-down"></i></span>
+            <span class="sub">14 of 3,842</span>
+          </div>
+          <i class="ti ti-x" style="color:var(--ink-3)"></i>
+        </div>
+        <div class="thumb" style="height:110px;margin-bottom:12px"><i class="ti ti-air-conditioning" style="font-size:44px"></i></div>
+        <div style="font-size:14px;margin-bottom:4px">مكيف سبليت 18000 وحدة</div>
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:13px"><span class="badge b-blue">Ready for shelf</span><span class="sub mono">AC-18K-INV</span></div>
+        <div class="card" style="margin-bottom:10px">
+          <div class="kv"><span class="k">Merchant</span><span style="color:var(--blue-d)">بيت العطور</span></div>
+          <div class="kv"><span class="k">Brand</span><span>Gree</span></div>
+          <div class="kv"><span class="k">Stock</span><span class="mono">42</span></div>
+          <div class="kv"><span class="k">Source</span><span>Salla catalog</span></div>
+        </div>
+        <div class="card" style="background:var(--green-bg);margin-bottom:14px">
+          <div class="kv"><span class="k" style="color:var(--green)">Merchant price</span><span class="mono">1,890</span></div>
+          <div class="kv"><span class="k" style="color:var(--green)">NML cost</span><span class="mono">1,610</span></div>
+          <div class="kv" style="border-top:1px solid rgba(47,107,72,.18);margin-top:5px;padding-top:7px"><span style="color:var(--green-d)">Margin</span><span class="mono" style="color:var(--green-d)">280 · 14.8%</span></div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <span class="pill" style="flex:1;justify-content:center;background:var(--red-bg);color:var(--red-d)">Reject</span>
+          <span class="pill ghost" style="flex:1;justify-content:center">Hold</span>
+          <span class="pill dark" style="flex:1.4;justify-content:center">Shelve</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div></div>
+<p class="cap"><b>Rules.</b> Grid by default — photo quality is the first thing being judged, and a table hides it. Missing images are flagged on the tile. The drawer pages up and down through the queue with the keyboard and auto-advances after a decision. <b>Schema change needed:</b> add <code>nml_cost</code> and a per-merchant default margin, since margin is the actual shelving criterion.</p>
+
+<h3>6.6 Onboarding — board and step queue</h3>
+<div class="wall"><div class="blob a"></div><div class="blob b"></div>
+<div class="win solo">
+  <div style="display:flex;gap:6px;margin-bottom:14px;align-items:center">
+    <span class="pill on">Board</span><span class="pill">Step queue</span>
+    <span class="pill line" style="margin-left:auto">Sara Mansour <i class="ti ti-chevron-down"></i></span>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px">
+    <div class="card" style="background:var(--green-bg);display:flex;gap:12px">
+      <svg width="46" height="46" viewBox="0 0 46 46" style="flex-shrink:0"><circle cx="23" cy="23" r="17" fill="none" stroke="rgba(47,107,72,.18)" stroke-width="5"/><circle cx="23" cy="23" r="17" fill="none" stroke="#2f6b48" stroke-width="5" stroke-linecap="round" stroke-dasharray="94 107" transform="rotate(-90 23 23)"/><text x="23" y="27" text-anchor="middle" font-size="12" fill="#1d5637">88</text></svg>
+      <div><div style="font-size:13px">Nabt Store</div><div class="sub" style="margin:2px 0 6px">7 of 8 steps · 11 days</div><span class="badge b-green">Go live</span></div>
+    </div>
+    <div class="card" style="background:var(--red-bg);display:flex;gap:12px">
+      <svg width="46" height="46" viewBox="0 0 46 46" style="flex-shrink:0"><circle cx="23" cy="23" r="17" fill="none" stroke="rgba(163,48,47,.16)" stroke-width="5"/><circle cx="23" cy="23" r="17" fill="none" stroke="#a3302f" stroke-width="5" stroke-linecap="round" stroke-dasharray="27 107" transform="rotate(-90 23 23)"/><text x="23" y="27" text-anchor="middle" font-size="12" fill="#8c2322">25</text></svg>
+      <div><div style="font-size:13px">متجر التميز</div><div class="sub" style="margin:2px 0 6px;color:var(--red)">2 of 8 steps · 24 days</div><span class="badge b-red">Collect documents</span></div>
+    </div>
+    <div class="card" style="display:flex;gap:12px">
+      <svg width="46" height="46" viewBox="0 0 46 46" style="flex-shrink:0"><circle cx="23" cy="23" r="17" fill="none" stroke="rgba(120,135,160,.2)" stroke-width="5"/><circle cx="23" cy="23" r="17" fill="none" stroke="#3f7fd6" stroke-width="5" stroke-linecap="round" stroke-dasharray="66 107" transform="rotate(-90 23 23)"/><text x="23" y="27" text-anchor="middle" font-size="12" fill="#1d4f8c">62</text></svg>
+      <div><div style="font-size:13px">بيت العطور</div><div class="sub" style="margin:2px 0 6px">5 of 8 steps · 9 days</div><span class="badge b-ghost">Catalog review</span></div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:6px;margin-bottom:12px;align-items:center">
+    <span class="pill">Board</span><span class="pill on">Step queue</span>
+    <span class="pill" style="background:var(--red-bg);color:var(--red-d)">Overdue only</span>
+    <span class="pill line" style="margin-left:auto">Mine <i class="ti ti-chevron-down"></i></span>
+  </div>
+  <table class="tbl">
+    <colgroup><col style="width:170px"><col><col style="width:110px"><col style="width:110px"><col style="width:140px"></colgroup>
+    <thead><tr><th>Merchant</th><th>Step</th><th>Owner</th><th>Due</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr class="warn"><td><div class="t">متجر التميز</div></td><td>Collect documents</td><td style="color:var(--ink-2)">Sara M.</td><td style="color:var(--red-d)">9 days late</td><td><span class="badge b-red">Blocked <i class="ti ti-chevron-down"></i></span></td></tr>
+      <tr class="warn"><td><div class="t">Zahra Kids</div></td><td>Agree pricing and margins</td><td style="color:var(--ink-2)">Sara M.</td><td style="color:var(--red-d)">3 days late</td><td><span class="badge b-ghost">In progress <i class="ti ti-chevron-down"></i></span></td></tr>
+      <tr><td><div class="t">بيت العطور</div></td><td>Product catalog review</td><td style="color:var(--ink-2)">Mona K.</td><td style="color:var(--ink-2)">Today</td><td><span class="badge b-blue">In progress <i class="ti ti-chevron-down"></i></span></td></tr>
+      <tr><td><div class="t">Nadia Kitchen</div></td><td>Verify commercial details</td><td style="color:var(--ink-2)">Sara M.</td><td style="color:var(--ink-2)">17 Aug</td><td><span class="badge b-ghost">Pending <i class="ti ti-chevron-down"></i></span></td></tr>
+      <tr class="good"><td><div class="t">Nabt Store</div></td><td>Go live</td><td style="color:var(--ink-2)">Sara M.</td><td style="color:var(--ink-2)">19 Aug</td><td><span class="badge" style="background:var(--ink);color:#fff">Activate</span></td></tr>
+    </tbody>
+  </table>
+</div></div>
+<p class="cap"><b>Rules.</b> Card tint reflects health, not progress — days since CTA measured against the template SLA, so a merchant at 12% after two days stays neutral while one at 25% after 24 days goes red. Steps carry their own owner, which is often a different team. Status changes inline. When every required step is done the status cell becomes an Activate button.</p>
+
+<h3>6.7 Pipeline kanban</h3>
+<div class="wall"><div class="blob a"></div><div class="blob b"></div>
+<div class="win solo">
+  <div style="display:flex;gap:6px;margin-bottom:14px;align-items:center">
+    <span class="pill on">My pipeline</span><span class="pill">Team</span>
+    <span class="pill line" style="margin-left:auto">Ahmed Salem <i class="ti ti-chevron-down"></i></span>
+  </div>
+  <div class="kb" style="grid-template-columns:repeat(5,1fr)">
+    <div class="kcol">
+      <div class="h"><span>Assigned</span><span class="mono sub">312</span></div>
+      <div class="kcard"><div class="t">مؤسسة الركن</div><div class="m">Dammam · 96 SKUs</div><span class="badge b-ghost">1d</span></div>
+      <div class="kcard"><div class="t">Nadia Kitchen</div><div class="m">Riyadh · 54 SKUs</div><span class="badge b-amber">5d</span></div>
+      <div class="kcard"><div class="t">Zain Store</div><div class="m">Tabuk · 22 SKUs</div><span class="badge b-red">12d</span></div>
+    </div>
+    <div class="kcol">
+      <div class="h"><span>Contacted</span><span class="mono sub">148</span></div>
+      <div class="kcard"><div class="t">Layali Perfumes</div><div class="m">Jeddah · 64 SKUs</div><span class="badge b-ghost">2d</span></div>
+      <div class="kcard"><div class="t">Hala Home</div><div class="m">Jeddah · 148 SKUs</div><span class="badge b-amber">4d</span></div>
+    </div>
+    <div class="kcol">
+      <div class="h"><span>Interested</span><span class="mono sub">62</span></div>
+      <div class="kcard"><div class="t">متجر الواحة</div><div class="m">Abha · 133 SKUs</div><span class="badge b-ghost">1d</span></div>
+      <div class="kcard" style="background:var(--blue-bg);border:1px dashed rgba(63,127,214,.5)"><div class="t">Sanad Tools</div><div class="m" style="color:var(--blue-d);margin-bottom:0">Drop here</div></div>
+    </div>
+    <div class="kcol">
+      <div class="h"><span>Form sent</span><span class="mono sub">41</span></div>
+      <div class="kcard"><div class="t">متجر نوران</div><div class="m">Riyadh · 218 SKUs</div><span class="badge b-red">4d</span></div>
+      <div class="kcard"><div class="t">Rukn Gifts</div><div class="m">Makkah · 77 SKUs</div><span class="badge b-ghost">1d</span></div>
+    </div>
+    <div class="kcol">
+      <div class="h"><span style="color:var(--green)">CTA done</span><span class="mono" style="color:var(--green)">18</span></div>
+      <div class="kcard" style="background:var(--green-bg)"><div class="t">Nabt Store</div><div class="m">Riyadh · 412 SKUs</div><span class="badge b-green">Assign AM</span></div>
+      <div class="kcard" style="background:var(--green-bg)"><div class="t">Oud Nights</div><div class="m">Jeddah · 190 SKUs</div><span class="badge b-green">Assign AM</span></div>
+    </div>
+  </div>
+</div></div>
+<p class="cap"><b>Rules.</b> Forward drags advance one stage only; backward drags are unrestricted. <b>Nothing can be dragged into CTA done</b> — that column is filled by the merchant submitting the form, never by a specialist, or the conversion metric becomes meaningless. Cards there aren't draggable either; they carry an Assign AM action. Days-in-stage is the only colour on a card.</p>
+
+<h3>6.8 Dashboards — manager and specialist</h3>
+<div class="wall"><div class="blob a"></div><div class="blob b"></div>
+<div class="win solo">
+  <div class="panel" style="margin-bottom:14px">
+    <h4>Conversion funnel</h4>
+    <div style="display:flex;align-items:flex-end;gap:8px;height:110px">
+      <div style="flex:1;text-align:center"><div class="mono" style="font-size:12px;margin-bottom:5px">1,284</div><div style="height:80px;border-radius:9px 9px 0 0;background:#3f7fd6"></div></div>
+      <div style="flex:1;text-align:center"><div class="mono" style="font-size:12px;margin-bottom:5px">742</div><div style="height:46px;border-radius:9px 9px 0 0;background:#5b9bf5"></div></div>
+      <div style="flex:1;text-align:center"><div class="mono" style="font-size:12px;margin-bottom:5px">480</div><div style="height:30px;border-radius:9px 9px 0 0;background:#7fb3f7"></div></div>
+      <div style="flex:1;text-align:center"><div class="mono" style="font-size:12px;margin-bottom:5px">320</div><div style="height:20px;border-radius:9px 9px 0 0;background:#a3c9fa"></div></div>
+      <div style="flex:1;text-align:center"><div class="mono" style="font-size:12px;margin-bottom:5px;color:var(--green-d)">240</div><div style="height:15px;border-radius:9px 9px 0 0;background:#3f9c6b"></div></div>
+      <div style="flex:1;text-align:center"><div class="mono" style="font-size:12px;margin-bottom:5px;color:var(--green-d)">150</div><div style="height:9px;border-radius:9px 9px 0 0;background:#2f6b48"></div></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <div style="flex:1;text-align:center" class="sub">Assigned</div><div style="flex:1;text-align:center" class="sub">Contacted</div>
+      <div style="flex:1;text-align:center" class="sub">Interested</div><div style="flex:1;text-align:center" class="sub">Form sent</div>
+      <div style="flex:1;text-align:center" class="sub">CTA done</div><div style="flex:1;text-align:center" class="sub">Live</div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:6px">
+      <div style="flex:1;text-align:center"><span class="badge b-ghost">58%</span></div>
+      <div style="flex:1;text-align:center"><span class="badge b-red">65%</span></div>
+      <div style="flex:1;text-align:center"><span class="badge b-ghost">67%</span></div>
+      <div style="flex:1;text-align:center"><span class="badge b-green">75%</span></div>
+      <div style="flex:1;text-align:center"><span class="badge b-ghost">63%</span></div>
+      <div style="flex:1"></div>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:1.6fr 1fr 1fr;gap:12px">
+    <div class="panel">
+      <h4>Specialists</h4>
+      <table class="tbl" style="font-size:12.5px">
+        <colgroup><col><col style="width:60px"><col style="width:55px"><col style="width:60px"></colgroup>
+        <thead><tr><th>Name</th><th style="text-align:right">Open</th><th style="text-align:right">CTA</th><th style="text-align:right">Conv</th></tr></thead>
+        <tbody>
+          <tr class="good"><td><div class="t">Khaled Rashed</div></td><td class="num">96</td><td class="num" style="color:var(--green-d)">62</td><td class="num" style="color:var(--green-d)">24%</td></tr>
+          <tr><td><div class="t">Ahmed Salem</div></td><td class="num">142</td><td class="num">54</td><td class="num">19%</td></tr>
+          <tr><td><div class="t">Sara Mansour</div></td><td class="num">88</td><td class="num">31</td><td class="num">17%</td></tr>
+          <tr class="warn"><td><div class="t">Noura Alharbi</div></td><td class="num" style="color:var(--red-d)">231</td><td class="num" style="color:var(--red-d)">18</td><td class="num" style="color:var(--red-d)">6%</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="panel" style="background:var(--blue-bg)">
+      <div style="font-size:11.5px;color:var(--blue-d);margin-bottom:5px">Sitting in the pool</div>
+      <div style="font-size:26px;color:var(--blue-d);margin-bottom:12px">1,284</div>
+      <span class="pill dark">Assign now</span>
+    </div>
+    <div class="panel" style="background:var(--red-bg)">
+      <div style="font-size:11.5px;color:var(--red);margin-bottom:5px">Quiet over 7 days</div>
+      <div style="font-size:26px;color:var(--red-d);margin-bottom:12px">37</div>
+      <span class="pill ghost" style="color:var(--red-d)">Review</span>
+    </div>
+  </div>
+</div></div>
+<p class="cap"><b>Manager view.</b> Funnel bars are drawn to true scale — a funnel chart that flatters you is useless. The drop-off chip between each pair is the actionable number, and only the worst one is tinted. The leaderboard sorts by conversion, not volume.</p>
+
+<div class="wall" style="margin-top:14px"><div class="blob a"></div><div class="blob b"></div>
+<div class="win">
+  <div class="nav">
+    <div class="brand"><div class="mark">N</div><span style="font-size:14px">NML</span></div>
+    <div class="nav-item on"><i class="ti ti-layout-grid"></i>My day</div>
+    <div class="nav-item"><i class="ti ti-building-store"></i>Merchants</div>
+    <div class="nav-item"><i class="ti ti-layout-columns"></i>Pipeline</div>
+    <div class="nav-item"><i class="ti ti-checkbox"></i>Tasks</div>
+  </div>
+  <div class="main">
+    <div class="top">
+      <div style="flex:1"><div style="font-size:16px">Good morning, Ahmed</div><div class="sub">9 merchants need you today</div></div>
+      <div class="user"><div class="av" style="background:#1d4f8c">AS</div>Ahmed</div>
+    </div>
+    <div class="tiles" style="grid-template-columns:repeat(4,1fr)">
+      <div class="tile red"><div class="k">Late</div><div class="v">3</div></div>
+      <div class="tile"><div class="k">Today</div><div class="v">6</div></div>
+      <div class="tile amber"><div class="k">Forms out</div><div class="v">11</div></div>
+      <div class="tile green"><div class="k">Signed</div><div class="v">54</div></div>
+    </div>
+    <div class="panel">
+      <div style="display:flex;justify-content:space-between;margin-bottom:12px"><span style="font-size:14px">Work queue</span><span class="sub">Oldest first</span></div>
+      <div class="card" style="display:flex;align-items:center;gap:10px;margin-bottom:7px;background:var(--red-bg)">
+        <div style="flex:1;min-width:0"><div style="font-size:13px">متجر نوران</div><div class="sub" style="color:var(--red-d)">Form sent 4 days ago · no reply</div></div>
+        <span class="pill ghost"><i class="ti ti-brand-whatsapp" style="color:var(--green)"></i></span>
+        <span class="pill ghost"><i class="ti ti-phone"></i></span><span class="pill dark">Log</span>
+      </div>
+      <div class="card" style="display:flex;align-items:center;gap:10px;margin-bottom:7px;background:var(--red-bg)">
+        <div style="flex:1;min-width:0"><div style="font-size:13px">Zain Store</div><div class="sub" style="color:var(--red-d)">Callback promised · 2 days late</div></div>
+        <span class="pill ghost"><i class="ti ti-brand-whatsapp" style="color:var(--green)"></i></span>
+        <span class="pill ghost"><i class="ti ti-phone"></i></span><span class="pill dark">Log</span>
+      </div>
+      <div class="card" style="display:flex;align-items:center;gap:10px;margin-bottom:7px">
+        <div style="flex:1;min-width:0"><div style="font-size:13px">Layali Perfumes</div><div class="sub">Second call · today 4pm</div></div>
+        <span class="pill ghost"><i class="ti ti-brand-whatsapp" style="color:var(--green)"></i></span>
+        <span class="pill ghost"><i class="ti ti-phone"></i></span><span class="pill dark">Log</span>
+      </div>
+      <div class="card" style="display:flex;align-items:center;gap:10px">
+        <div style="flex:1;min-width:0"><div style="font-size:13px">مؤسسة الركن</div><div class="sub">First call · assigned yesterday</div></div>
+        <span class="pill ghost"><i class="ti ti-brand-whatsapp" style="color:var(--green)"></i></span>
+        <span class="pill ghost"><i class="ti ti-phone"></i></span><span class="pill dark">Log</span>
+      </div>
+    </div>
+  </div>
+</div></div>
+<p class="cap"><b>Specialist view.</b> Four nav items, home is "My day". Row subtitles say why the merchant is in the queue, not just when. Call, WhatsApp and Log are on the row — the three actions that make up his day never require opening a record.</p>
+
+<h3>6.9 Prospecting</h3>
+<div class="wall"><div class="blob a"></div><div class="blob b"></div>
+<div class="win solo">
+  <div style="display:flex;gap:10px;margin-bottom:14px">
+    <div class="search" style="background:rgba(255,255,255,.9);color:var(--ink)"><i class="ti ti-search" style="color:var(--ink-2)"></i>مكيف سبليت 18000</div>
+    <span class="pill dark">Search</span>
+  </div>
+  <div class="tiles" style="grid-template-columns:repeat(3,1fr);margin-bottom:14px">
+    <div class="tile"><div class="k">Products found</div><div class="v">248</div></div>
+    <div class="tile green"><div class="k">New stores</div><div class="v">164</div></div>
+    <div class="tile blue"><div class="k">Already ours</div><div class="v">84</div></div>
+  </div>
+  <div class="panel">
+    <div class="bulk"><span class="n">42 stores selected</span><a href="#">Create leads</a><a href="#">Export</a><span class="x">Clear</span></div>
+    <table class="tbl">
+      <colgroup><col style="width:34px"><col><col style="width:90px"><col style="width:170px"><col style="width:170px"></colgroup>
+      <thead><tr><th></th><th>Product</th><th style="text-align:right">Price</th><th>Store</th><th>In NML</th></tr></thead>
+      <tbody>
+        <tr class="good"><td><i class="ti ti-square-check chk" style="color:var(--green)"></i></td><td><div class="t">مكيف جري 18000</div></td><td class="num">1,850</td><td><div class="t">برد الشتاء</div></td><td><span class="badge b-green">New store</span></td></tr>
+        <tr class="good"><td><i class="ti ti-square-check chk" style="color:var(--green)"></i></td><td><div class="t">سبليت انفرتر 18</div></td><td class="num">1,999</td><td><div class="t">Cool Line</div></td><td><span class="badge b-green">New store</span></td></tr>
+        <tr><td><i class="ti ti-square-off chk" style="color:var(--ink-5)"></i></td><td><div class="t" style="color:var(--ink-2)">مكيف سبليت 18000</div></td><td class="num" style="color:var(--ink-3)">1,890</td><td><div class="t" style="color:var(--ink-2)">بيت العطور</div></td><td><span class="badge b-blue">Form sent · NML-01042</span></td></tr>
+        <tr><td><i class="ti ti-square-off chk" style="color:var(--ink-5)"></i></td><td><div class="t" style="color:var(--ink-2)">مكيف حائطي 18</div></td><td class="num" style="color:var(--ink-3)">2,100</td><td><div class="t" style="color:var(--ink-2)">Rukn Al Hadaya</div></td><td><span class="badge b-red">Lost · May · margins</span></td></tr>
+        <tr><td><i class="ti ti-square chk"></i></td><td><div class="t">مكيف شباك 18000</div></td><td class="num">1,420</td><td><div class="t">متجر الأجواء</div></td><td><span class="badge b-green">New store</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div></div>
+<p class="cap"><b>Rules.</b> The "In NML" column is the whole value of the screen. Stores already in the pipeline have <b>disabled</b> checkboxes — creating a duplicate lead for a merchant someone is mid-negotiation with is the worst thing this tool could do. Lost stores show the date and reason and route through the existing record via a "revive" action, never a new one.</p>
+
+<h3>6.10 Public merchant form</h3>
+<div class="wall" style="display:flex;justify-content:center;gap:16px"><div class="blob a"></div><div class="blob b"></div>
+  <div class="phone" dir="rtl">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px">
+      <div style="display:flex;align-items:center;gap:9px"><div class="mark">N</div><span style="font-size:14px">نمل</span></div>
+      <span class="pill ghost">English</span>
+    </div>
+    <div style="font-size:16px;margin-bottom:6px">تأكيد الشراكة مع نمل</div>
+    <div class="sub" style="line-height:1.7;margin-bottom:15px">راجع بيانات متجرك وأكمل الناقص. التعبئة تستغرق دقيقتين.</div>
+    <div class="card" style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:9px"><span style="font-size:12.5px">بيانات متجرك</span><span class="badge b-green">من سلة</span></div>
+      <div class="kv"><span class="k">اسم المتجر</span><span>بيت العطور</span></div>
+      <div class="kv"><span class="k">المسؤول</span><span>نوران العتيبي</span></div>
+      <div class="kv"><span class="k">الجوال</span><span class="mono">0551234567</span></div>
+      <div style="font-size:11.5px;color:var(--blue);margin-top:8px">تعديل البيانات</div>
+    </div>
+    <div class="lbl">رقم السجل التجاري</div>
+    <div class="field empty mono" style="margin-bottom:10px">1010XXXXXX</div>
+    <div class="lbl">رقم الآيبان</div>
+    <div class="field mono" style="margin-bottom:10px">SA03 8000 0000 6080 1016 7519</div>
+    <div class="lbl">عنوان الاستلام</div>
+    <div class="field err empty" style="margin-bottom:4px">الحي، الشارع، المدينة</div>
+    <div style="font-size:11.5px;color:var(--red-d);margin-bottom:12px">هذا الحقل مطلوب</div>
+    <div class="card" style="display:flex;align-items:center;gap:11px;border:1px dashed rgba(120,135,160,.4);margin-bottom:13px">
+      <i class="ti ti-cloud-upload" style="font-size:20px;color:var(--ink-2)"></i>
+      <div><div style="font-size:12.5px">صورة السجل التجاري</div><div class="sub">اختياري · صورة أو PDF</div></div>
+    </div>
+    <div class="card" style="display:flex;gap:10px;margin-bottom:14px">
+      <i class="ti ti-square-check chk on"></i>
+      <span style="font-size:12px;color:var(--ink-2);line-height:1.6">أوافق على شروط الشراكة مع نمل وعرض منتجاتي في فروعها</span>
+    </div>
+    <div class="pill dark" style="width:100%;justify-content:center;padding:12px 0;margin-bottom:10px">إرسال والانضمام لنمل</div>
+    <div class="sub" style="text-align:center">لأي استفسار تواصل مع أحمد سالم · 0551112233</div>
+  </div>
+
+  <div class="phone" dir="rtl">
+    <div style="width:48px;height:48px;border-radius:16px;background:var(--green-bg);display:flex;align-items:center;justify-content:center;margin-bottom:14px"><i class="ti ti-check" style="font-size:25px;color:var(--green-d)"></i></div>
+    <div style="font-size:16px;margin-bottom:7px">تم استلام طلبك</div>
+    <div class="sub" style="line-height:1.7;margin-bottom:15px">أصبح متجرك ضمن شركاء نمل. هذه الخطوات القادمة:</div>
+    <div class="card" style="display:flex;gap:10px;margin-bottom:7px"><div class="av" style="background:var(--ink)">١</div><div><div style="font-size:12.5px">مكالمة ترحيبية</div><div class="sub">خلال يوم عمل</div></div></div>
+    <div class="card" style="display:flex;gap:10px;margin-bottom:7px"><div class="av" style="background:rgba(120,135,160,.25);color:var(--ink-2)">٢</div><div><div style="font-size:12.5px">مراجعة المنتجات</div><div class="sub">٣١٢ منتج قيد المراجعة</div></div></div>
+    <div class="card" style="display:flex;gap:10px;margin-bottom:15px"><div class="av" style="background:rgba(120,135,160,.25);color:var(--ink-2)">٣</div><div><div style="font-size:12.5px">عرض منتجاتك في الفروع</div><div class="sub">بعد الاتفاق على الأسعار</div></div></div>
+    <div class="card" style="display:flex;align-items:center;gap:11px;background:var(--blue-bg)">
+      <div class="av" style="background:#1d4f8c;width:32px;height:32px">أس</div>
+      <div style="flex:1"><div style="font-size:12.5px">أحمد سالم</div><div style="font-size:11.5px;color:var(--blue-d)">مسؤول حسابك</div></div>
+      <i class="ti ti-brand-whatsapp" style="font-size:20px;color:var(--green-d)"></i>
+    </div>
+  </div>
+
+  <div class="phone" dir="rtl">
+    <div style="width:48px;height:48px;border-radius:16px;background:var(--amber-bg);display:flex;align-items:center;justify-content:center;margin-bottom:14px"><i class="ti ti-clock-exclamation" style="font-size:25px;color:var(--amber)"></i></div>
+    <div style="font-size:16px;margin-bottom:7px">انتهت صلاحية الرابط</div>
+    <div class="sub" style="line-height:1.7;margin-bottom:15px">هذا الرابط صالح لمدة ٣٠ يوماً وقد انتهت مدته. اطلب رابطاً جديداً من مسؤول الحساب.</div>
+    <div class="card" style="display:flex;align-items:center;gap:11px;margin-bottom:10px">
+      <div class="av" style="background:#1d4f8c;width:32px;height:32px">أس</div>
+      <div style="flex:1"><div style="font-size:12.5px">أحمد سالم</div><div class="sub mono">0551112233</div></div>
+    </div>
+    <div class="pill dark" style="width:100%;justify-content:center;padding:11px 0;margin-bottom:9px">اطلب رابطاً جديداً</div>
+    <div class="sub" style="text-align:center">سيُبلَّغ مسؤول حسابك بطلبك</div>
+  </div>
+</div>
+<p class="cap"><b>Rules.</b> Arabic RTL by default, English toggle. What we already know is shown read-only with an edit link — never re-typed. Only three fields are genuinely required: CR, IBAN, pickup address. Validation is inline and in Arabic. The specialist's name and number sit at the bottom of every state. No login, no account, no app. The expired state fires a notification to the specialist and logs an activity instead of dead-ending.</p>
+
+<h2>7. Still to design</h2>
+<p>These aren't drawn yet. They inherit the components above, so Claude Code can build them from the patterns — but they haven't been reviewed.</p>
+<ul>
+  <li><b>Modal family</b> — log activity composer, change stage, mark lost, reassign, send form. All share the drawer shell in 6.3.</li>
+  <li><b>Form builder</b> — settings screen for editing the merchant form's JSON schema without a deploy. The most complex remaining screen.</li>
+  <li><b>Reports</b> — funnel drill-down, specialist performance, onboarding bottlenecks, shelf throughput. All use the funnel and table components from 6.8.</li>
+  <li><b>Settings</b> — users and roles, teams, onboarding template editor, lookups.</li>
+  <li><b>Tasks</b> — inherits the merchants table pattern.</li>
+  <li><b>Auth and system states</b> — login, empty, loading skeletons, error, permission denied.</li>
+  <li><b>Account manager and catalog ops dashboards</b> — same shell as 6.8 with different tiles.</li>
+</ul>
+
+<h2>8. Open decisions</h2>
+<ul>
+  <li><b>Specialist capacity threshold</b> — assumed 200 open merchants. Needs a real number; goes in settings as editable.</li>
+  <li><b>Product cost model</b> — add <code>nml_cost</code> to the products table plus a per-merchant default margin agreed during onboarding, with per-product override.</li>
+  <li><b>Dedupe match order</b> — Salla ID → store URL → phone. Confirm phone should count as a match at all; it's the loosest signal.</li>
+  <li><b>Onboarding template</b> — the eight default steps drive every SLA and every colour on the onboarding board. They need to match how the team actually works.</li>
+  <li><b>Blocked steps</b> — recommend requiring a reason, otherwise "blocked" becomes a parking space.</li>
+  <li><b>Brand assets</b> — only <code>#ED1C24</code> and white are exposed by nmlonline.sa. A real brand kit would replace the derived neutrals.</li>
+</ul>
+
+</div>
+</body>
+</html>
