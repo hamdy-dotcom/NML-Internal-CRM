@@ -1,0 +1,348 @@
+@import "tailwindcss";
+
+/* ── Design tokens (from NML-CRM-DESIGN-SYSTEM.html) ─────────────────────── */
+@theme {
+  /* Brand & text */
+  --color-nml-red:   #ed1c24;
+  --color-ink:       #1c2536;
+  --color-ink-2:     #5a6478;
+  --color-ink-3:     #8a93a5;
+  --color-ink-4:     #a8b0bf;
+  --color-ink-5:     #c3c9d4;
+
+  /* State colours */
+  --color-blue:      #3f7fd6;
+  --color-blue-d:    #1d4f8c;
+  --color-blue-bg:   rgba(226,237,251,.85);
+  --color-green:     #2f6b48;
+  --color-green-d:   #1d5637;
+  --color-green-bg:  rgba(217,240,226,.70);
+  --color-amber:     #8a5a10;
+  --color-amber-bg:  rgba(253,234,204,.72);
+  --color-red:       #a3302f;
+  --color-red-d:     #8c2322;
+  --color-red-bg:    rgba(250,214,214,.65);
+
+  /* Glass layers */
+  --color-g-win:     rgba(255,255,255,.38);
+  --color-g-panel:   rgba(255,255,255,.55);
+  --color-g-card:    rgba(255,255,255,.80);
+  --color-g-solid:   rgba(255,255,255,.95);
+  --color-g-line:    rgba(255,255,255,.75);
+
+  /* Radii */
+  --radius-win:   20px;
+  --radius-panel: 18px;
+  --radius-card:  15px;
+  --radius-row:   12px;
+  --radius-pill:  999px;
+
+  /* Fonts */
+  --font-latin:  Inter, system-ui, sans-serif;
+  --font-arabic: "IBM Plex Sans Arabic", Inter, sans-serif;
+  --font-mono:   "JetBrains Mono", monospace;
+}
+
+/* ── Base ─────────────────────────────────────────────────────────────────── */
+:root {
+  --nml-red:    #ed1c24;
+  --ink:        #1c2536;
+  --ink-2:      #5a6478;
+  --ink-3:      #8a93a5;
+  --ink-4:      #a8b0bf;
+  --ink-5:      #c3c9d4;
+  --blue:       #3f7fd6;
+  --blue-d:     #1d4f8c;
+  --blue-bg:    rgba(226,237,251,.85);
+  --green:      #2f6b48;
+  --green-d:    #1d5637;
+  --green-bg:   rgba(217,240,226,.70);
+  --amber:      #8a5a10;
+  --amber-bg:   rgba(253,234,204,.72);
+  --red:        #a3302f;
+  --red-d:      #8c2322;
+  --red-bg:     rgba(250,214,214,.65);
+  --g-win:      rgba(255,255,255,.38);
+  --g-panel:    rgba(255,255,255,.55);
+  --g-card:     rgba(255,255,255,.80);
+  --g-solid:    rgba(255,255,255,.95);
+  --g-line:     rgba(255,255,255,.75);
+  --blur:       blur(26px) saturate(1.5);
+  --r-win:      20px;
+  --r-panel:    18px;
+  --r-card:     15px;
+  --r-row:      12px;
+  --r-pill:     999px;
+  --shadow:     0 16px 44px rgba(40,60,110,.14);
+  --wallpaper:  linear-gradient(135deg,#bfd8f5 0%,#dfe3f7 28%,#f6d7e2 55%,#fcd9b4 80%,#f8e9d6 100%);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  background: var(--wallpaper);
+  background-attachment: fixed;
+  color: var(--ink);
+  font-family: Inter, "IBM Plex Sans Arabic", system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+:lang(ar), [dir="rtl"] {
+  font-family: "IBM Plex Sans Arabic", Inter, sans-serif;
+}
+
+/* Monospaced elements — merchant codes, phones, prices, IBANs */
+.mono, code {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 12px;
+}
+
+/* ── Scrollbar (thin, glass-style) ────────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(90,100,120,.25); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(90,100,120,.45); }
+
+/* ── Focus ────────────────────────────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* ── Glass layers ─────────────────────────────────────────────────────────── */
+.glass-win {
+  background: var(--g-win);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  border: 1px solid var(--g-line);
+  border-radius: var(--r-win);
+  box-shadow: var(--shadow);
+}
+
+.glass-panel {
+  background: var(--g-panel);
+  border: 1px solid var(--g-line);
+  border-radius: var(--r-panel);
+}
+
+.glass-card {
+  background: var(--g-card);
+  border: 1px solid rgba(255,255,255,.85);
+  border-radius: var(--r-card);
+}
+
+/* Drawers and modals also get backdrop-filter */
+.glass-drawer {
+  background: rgba(255,255,255,.5);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  border: 1px solid rgba(255,255,255,.7);
+  border-radius: var(--r-win);
+  box-shadow: 0 18px 48px rgba(40,60,110,.18);
+}
+
+/* ── Table ────────────────────────────────────────────────────────────────── */
+.nml-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 6px;
+  font-size: 13px;
+}
+
+.nml-table th {
+  text-align: start;
+  padding: 0 10px 3px;
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.nml-table td {
+  padding: 10px 10px;
+  background: var(--g-card);
+  border: 1px solid transparent;
+  vertical-align: middle;
+}
+
+.nml-table td:first-child {
+  border-radius: var(--r-row) 0 0 var(--r-row);
+  border-inline-start-width: 1px;
+}
+
+.nml-table td:last-child {
+  border-radius: 0 var(--r-row) var(--r-row) 0;
+  border-inline-end-width: 1px;
+}
+
+.nml-table tr:hover td { background: rgba(255,255,255,.9); }
+.nml-table tr.sel td   { background: var(--blue-bg); }
+.nml-table tr.warn td  { background: var(--red-bg); }
+.nml-table tr.good td  { background: var(--green-bg); }
+
+/* ── Stage badges ─────────────────────────────────────────────────────────── */
+.badge {
+  display: inline-block;
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: var(--r-pill);
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.badge-ghost  { background: var(--g-solid); border: 1px solid #dfe3ea; color: var(--ink-2); }
+.badge-blue   { background: var(--blue-bg); color: var(--blue-d); }
+.badge-blue-s { background: var(--blue); color: #fff; }
+.badge-green  { background: var(--green-bg); color: var(--green-d); }
+.badge-amber  { background: var(--amber-bg); color: var(--amber); }
+.badge-red    { background: var(--red-bg); color: var(--red-d); }
+
+/* ── Pills (every control is one) ────────────────────────────────────────── */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  padding: 6px 13px;
+  border-radius: var(--r-pill);
+  color: var(--ink-2);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.pill:hover        { background: rgba(255,255,255,.55); }
+.pill.active       { background: var(--g-solid); color: var(--ink); }
+.pill.outline      { border: 1px solid var(--g-line); background: rgba(255,255,255,.5); }
+.pill.dark         { background: var(--ink); color: #fff; }
+.pill.dark:hover   { background: #2d3748; }
+.pill.ghost        { background: rgba(255,255,255,.85); color: var(--ink); }
+.pill.ghost:hover  { background: rgba(255,255,255,.95); }
+.pill.danger       { background: var(--red-bg); color: var(--red-d); }
+.pill.danger:hover { background: rgba(250,180,180,.8); }
+
+/* ── Bulk action bar ──────────────────────────────────────────────────────── */
+.bulk-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 9px 14px;
+  border-radius: 13px;
+  background: rgba(28,37,54,.92);
+  margin-bottom: 10px;
+}
+.bulk-bar .count { font-size: 12px; color: #fff; font-weight: 500; }
+.bulk-bar a, .bulk-bar button {
+  font-size: 12px; color: #cdd4e0; text-decoration: none;
+  background: none; border: none; cursor: pointer; padding: 0;
+}
+.bulk-bar a:hover, .bulk-bar button:hover { color: #fff; }
+.bulk-bar .close { margin-inline-start: auto; font-size: 12px; color: var(--ink-3); cursor: pointer; }
+
+/* ── Stage rail ───────────────────────────────────────────────────────────── */
+.stage-rail {
+  position: relative;
+  padding: 16px 14px 14px;
+}
+.stage-rail .rail-line {
+  position: absolute;
+  top: 24px;
+  inset-inline-start: 60px;
+  inset-inline-end: 60px;
+  height: 2px;
+  background: rgba(120,135,160,.22);
+}
+.stage-rail .rail-fill {
+  position: absolute;
+  top: 24px;
+  inset-inline-start: 60px;
+  height: 2px;
+  background: var(--blue);
+}
+.stage-rail .steps {
+  position: relative;
+  display: flex;
+}
+.stage-rail .step {
+  flex: 1;
+  text-align: center;
+}
+.stage-rail .dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: rgba(120,135,160,.3);
+  margin: 0 auto 9px;
+}
+.stage-rail .step.done .dot { background: var(--blue); }
+.stage-rail .step.now .dot  {
+  width: 14px; height: 14px;
+  background: #fff;
+  border: 3px solid var(--blue);
+  margin: -2px auto 7px;
+}
+.stage-rail .step-name { font-size: 11.5px; color: var(--ink-2); }
+.stage-rail .step.now .step-name { color: var(--ink); font-weight: 500; }
+.stage-rail .step.todo .step-name { color: var(--ink-4); }
+.stage-rail .step-date { font-size: 11px; color: var(--ink-4); }
+.stage-rail .step-date.late { color: var(--red); }
+
+/* ── Stat tiles ───────────────────────────────────────────────────────────── */
+.stat-tile {
+  padding: 12px 14px;
+  border-radius: var(--r-card);
+  background: var(--g-panel);
+  border: 1px solid var(--g-line);
+}
+.stat-tile .tile-key   { font-size: 11.5px; color: var(--ink-2); margin-bottom: 4px; }
+.stat-tile .tile-value { font-size: 22px; font-weight: 500; font-family: "JetBrains Mono", monospace; }
+.stat-tile.blue   { background: var(--blue-bg);  }
+.stat-tile.blue .tile-key, .stat-tile.blue .tile-value { color: var(--blue-d); }
+.stat-tile.green  { background: var(--green-bg); }
+.stat-tile.green .tile-key  { color: var(--green); }
+.stat-tile.green .tile-value { color: var(--green-d); }
+.stat-tile.amber  { background: var(--amber-bg); }
+.stat-tile.amber .tile-key, .stat-tile.amber .tile-value { color: var(--amber); }
+.stat-tile.red    { background: var(--red-bg);   }
+.stat-tile.red .tile-key  { color: var(--red); }
+.stat-tile.red .tile-value { color: var(--red-d); }
+
+/* ── Inputs / fields ──────────────────────────────────────────────────────── */
+.field {
+  padding: 8px 14px;
+  border-radius: 13px;
+  background: rgba(255,255,255,.9);
+  border: 1px solid rgba(255,255,255,1);
+  font-size: 13px;
+  width: 100%;
+  color: var(--ink);
+  outline: none;
+  transition: border-color 0.12s;
+}
+.field:focus { border-color: var(--blue); }
+.field.err   { background: rgba(250,214,214,.4); border-color: rgba(163,48,47,.3); }
+.field::placeholder { color: var(--ink-4); }
+
+textarea.field { resize: vertical; min-height: 80px; }
+
+.field-label { font-size: 11.5px; color: var(--ink-2); margin-bottom: 5px; display: block; }
+
+/* ── Progress ring ────────────────────────────────────────────────────────── */
+.progress-ring svg { transform: rotate(-90deg); }
+.progress-ring circle { transition: stroke-dashoffset 0.4s ease; }
+
+/* ── KV row ───────────────────────────────────────────────────────────────── */
+.kv { display: flex; justify-content: space-between; align-items: baseline; padding: 3px 0; font-size: 12.5px; }
+.kv .k { color: var(--ink-3); flex-shrink: 0; padding-inline-end: 8px; }
+.kv > *:last-child { color: var(--ink); text-align: end; }
+
+/* ── Utility ──────────────────────────────────────────────────────────────── */
+.ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sub      { font-size: 11px; color: var(--ink-3); }
+.num      { text-align: end; font-family: "JetBrains Mono", monospace; color: var(--ink-2); }
+.awaiting { color: var(--ink-4); font-style: italic; }
