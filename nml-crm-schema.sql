@@ -644,7 +644,7 @@ begin
         insert into public.merchant_onboarding_steps
           (onboarding_id, merchant_id, order_index, title, description, is_required, owner_id, due_at)
         select v_ob, new.id, s.order_index, s.title, s.description, s.is_required,
-               new.account_manager_id, now() + (s.sla_days || ' days')::interval
+               new.account_manager_id, new.cta_completed_at
         from public.onboarding_template_steps s
         where s.template_id = v_tpl order by s.order_index;
       end if;

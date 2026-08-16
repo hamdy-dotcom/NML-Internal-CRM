@@ -1,9 +1,11 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import type { Product, Merchant, Profile, ProductStatus } from '@/lib/database.types';
 import { fmtCurrency, fmtDate, PRODUCT_STATUS_LABELS, productStatusBadgeClass } from '@/lib/utils';
 import EmptyState from '@/components/ui/EmptyState';
+import ProductImportModal from '@/components/products/ProductImportModal';
 
 const STATUS_ORDER: ProductStatus[] = ['discovered', 'ready_for_shelf', 'in_review', 'shelved', 'rejected', 'archived'];
 
@@ -14,7 +16,9 @@ interface Props {
 }
 
 export default function ProductsTab({ merchant, products, currentProfile }: Props) {
-  const [filter, setFilter] = useState<ProductStatus | 'all'>('all');
+  const router = useRouter();
+  const [filter,       setFilter]       = useState<ProductStatus | 'all'>('all');
+  const [importOpen,   setImportOpen]   = useState(false);
 
   const counts = STATUS_ORDER.reduce((acc, s) => {
     acc[s] = products.filter(p => p.status === s).length;
@@ -25,8 +29,10 @@ export default function ProductsTab({ merchant, products, currentProfile }: Prop
 
   return (
     <div>
+      {/* Toolbar */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
       {/* Status strip */}
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
         <button
           className={`pill${filter === 'all' ? ' active' : ' ghost'}`}
           style={{ fontSize: 12 }}
@@ -44,6 +50,11 @@ export default function ProductsTab({ merchant, products, currentProfile }: Prop
             {PRODUCT_STATUS_LABELS[s]} ({counts[s]})
           </button>
         ))}
+      </div>
+
+        <button className="pill outline" style={{ fontSize: 12, flexShrink: 0 }} onClick={() => setImportOpen(true)}>
+          ↑ Upload products
+        </button>
       </div>
 
       {visible.length === 0 ? (
@@ -95,6 +106,14 @@ export default function ProductsTab({ merchant, products, currentProfile }: Prop
           </div>
         </div>
       )}
+
+      <ProductImportModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        merchantId={merchant.id}
+        merchantStage={merchant.stage}
+        onImportDone={() => { setImportOpen(false); router.refresh(); }}
+      />
     </div>
   );
 }
