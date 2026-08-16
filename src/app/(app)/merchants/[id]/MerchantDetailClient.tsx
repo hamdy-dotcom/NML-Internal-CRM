@@ -323,108 +323,74 @@ export default function MerchantDetailClient({
       {/* ── Modals ─────────────────────────────────────────────────────── */}
 
       {/* Change stage */}
-      <Modal open={stageOpen} onClose={() => setStageOpen(false)} title="Change stage">
-        <div style={{ marginBottom: 12 }}>
-          <label className="field-label">New stage</label>
-          <select className="field" value={newStage} onChange={e => setNewStage(e.target.value as MerchantStage)}>
-            {STAGES_ORDER.map(s => (
-              <option key={s} value={s}>{STAGE_LABELS[s]}</option>
-            ))}
-          </select>
-        </div>
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <button className="pill outline" onClick={() => setStageOpen(false)}>Cancel</button>
-          <button
-            className="pill dark"
-            disabled={pending}
-            onClick={() => {
-              startTransition(async () => {
-                const res = await changeStage(merchant.id, newStage);
-                if (res.error) toast.error(res.error);
-                else { toast.success('Stage updated.'); setStageOpen(false); }
-              });
-            }}
-          >
-            {pending ? 'Saving…' : 'Update stage'}
-          </button>
-        </div>
+      <Modal open={stageOpen} onClose={() => setStageOpen(false)} title="Change stage" footer={<>
+        <button className="pill outline" onClick={() => setStageOpen(false)}>Cancel</button>
+        <button className="pill dark" disabled={pending} onClick={() => {
+          startTransition(async () => {
+            const res = await changeStage(merchant.id, newStage);
+            if (res.error) toast.error(res.error);
+            else { toast.success('Stage updated.'); setStageOpen(false); }
+          });
+        }}>
+          {pending ? 'Saving…' : 'Update stage'}
+        </button>
+      </>}>
+        <label className="field-label">New stage</label>
+        <select className="field" value={newStage} onChange={e => setNewStage(e.target.value as MerchantStage)}>
+          {STAGES_ORDER.map(s => <option key={s} value={s}>{STAGE_LABELS[s]}</option>)}
+        </select>
       </Modal>
 
       {/* Put on hold */}
-      <Modal open={holdOpen} onClose={() => setHoldOpen(false)} title="Put on hold" danger>
-        <div style={{ marginBottom: 12 }}>
-          <label className="field-label">Reason</label>
-          <textarea className="field" value={holdReason} onChange={e => setHoldReason(e.target.value)} placeholder="Why is this merchant on hold?" />
-        </div>
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <button className="pill outline" onClick={() => setHoldOpen(false)}>Cancel</button>
-          <button
-            className="pill danger"
-            disabled={!holdReason.trim() || pending}
-            onClick={() => {
-              startTransition(async () => {
-                const res = await putOnHold(merchant.id, holdReason);
-                if (res.error) toast.error(res.error);
-                else { toast.success('Merchant put on hold.'); setHoldOpen(false); }
-              });
-            }}
-          >
-            {pending ? 'Saving…' : 'Put on hold'}
-          </button>
-        </div>
+      <Modal open={holdOpen} onClose={() => setHoldOpen(false)} title="Put on hold" danger footer={<>
+        <button className="pill outline" onClick={() => setHoldOpen(false)}>Cancel</button>
+        <button className="pill danger" disabled={!holdReason.trim() || pending} onClick={() => {
+          startTransition(async () => {
+            const res = await putOnHold(merchant.id, holdReason);
+            if (res.error) toast.error(res.error);
+            else { toast.success('Merchant put on hold.'); setHoldOpen(false); }
+          });
+        }}>
+          {pending ? 'Saving…' : 'Put on hold'}
+        </button>
+      </>}>
+        <label className="field-label">Reason</label>
+        <textarea className="field" value={holdReason} onChange={e => setHoldReason(e.target.value)} placeholder="Why is this merchant on hold?" />
       </Modal>
 
       {/* Mark lost */}
-      <Modal open={lostOpen} onClose={() => setLostOpen(false)} title="Mark as lost" danger>
-        <div style={{ marginBottom: 12 }}>
-          <label className="field-label">Lost reason</label>
-          <textarea className="field" value={lostReason} onChange={e => setLostReason(e.target.value)} placeholder="Why was this merchant lost?" />
-        </div>
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <button className="pill outline" onClick={() => setLostOpen(false)}>Cancel</button>
-          <button
-            className="pill danger"
-            disabled={!lostReason.trim() || pending}
-            onClick={() => {
-              startTransition(async () => {
-                const res = await markLost(merchant.id, lostReason);
-                if (res.error) toast.error(res.error);
-                else { toast.success('Merchant marked lost.'); setLostOpen(false); }
-              });
-            }}
-          >
-            {pending ? 'Saving…' : 'Mark lost'}
-          </button>
-        </div>
+      <Modal open={lostOpen} onClose={() => setLostOpen(false)} title="Mark as lost" danger footer={<>
+        <button className="pill outline" onClick={() => setLostOpen(false)}>Cancel</button>
+        <button className="pill danger" disabled={!lostReason.trim() || pending} onClick={() => {
+          startTransition(async () => {
+            const res = await markLost(merchant.id, lostReason);
+            if (res.error) toast.error(res.error);
+            else { toast.success('Merchant marked lost.'); setLostOpen(false); }
+          });
+        }}>
+          {pending ? 'Saving…' : 'Mark lost'}
+        </button>
+      </>}>
+        <label className="field-label">Lost reason</label>
+        <textarea className="field" value={lostReason} onChange={e => setLostReason(e.target.value)} placeholder="Why was this merchant lost?" />
       </Modal>
 
       {/* Reassign */}
-      <Modal open={reassignOpen} onClose={() => setReassignOpen(false)} title="Reassign merchant">
-        <div style={{ marginBottom: 12 }}>
-          <label className="field-label">New acquisition owner</label>
-          <UserPicker
-            value={newOwner}
-            onChange={setNewOwner}
-            roles={['acq_specialist', 'acq_manager', 'admin']}
-          />
-        </div>
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <button className="pill outline" onClick={() => setReassignOpen(false)}>Cancel</button>
-          <button
-            className="pill dark"
-            disabled={!newOwner || pending}
-            onClick={() => {
-              if (!newOwner) return;
-              startTransition(async () => {
-                const res = await reassignMerchant(merchant.id, newOwner);
-                if (res.error) toast.error(res.error);
-                else { toast.success('Merchant reassigned.'); setReassignOpen(false); }
-              });
-            }}
-          >
-            {pending ? 'Saving…' : 'Reassign'}
-          </button>
-        </div>
+      <Modal open={reassignOpen} onClose={() => setReassignOpen(false)} title="Reassign merchant" footer={<>
+        <button className="pill outline" onClick={() => setReassignOpen(false)}>Cancel</button>
+        <button className="pill dark" disabled={!newOwner || pending} onClick={() => {
+          if (!newOwner) return;
+          startTransition(async () => {
+            const res = await reassignMerchant(merchant.id, newOwner);
+            if (res.error) toast.error(res.error);
+            else { toast.success('Merchant reassigned.'); setReassignOpen(false); }
+          });
+        }}>
+          {pending ? 'Saving…' : 'Reassign'}
+        </button>
+      </>}>
+        <label className="field-label">New acquisition owner</label>
+        <UserPicker value={newOwner} onChange={setNewOwner} roles={['acq_specialist', 'acq_manager', 'admin']} />
       </Modal>
     </div>
   );

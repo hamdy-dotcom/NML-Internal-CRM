@@ -214,93 +214,53 @@ export default function MerchantsTable({ rows, view }: Props) {
       </div>
 
       {/* Reassign modal */}
-      <Modal open={reassignOpen} onClose={() => setReassignOpen(false)} title="Reassign merchants">
-        <p style={{ fontSize: 12.5, color: 'var(--ink-3)', marginBottom: 12 }}>
-          Reassigning {ids.length} merchant{ids.length !== 1 ? 's' : ''} to:
-        </p>
-        <UserPicker
-          value={newOwnerId}
-          onChange={setNewOwnerId}
-          roles={['acq_specialist', 'acq_manager', 'admin']}
-        />
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
-          <button className="pill outline" onClick={() => setReassignOpen(false)}>Cancel</button>
-          <button
-            className="pill dark"
-            disabled={!newOwnerId || pending}
-            onClick={() => {
-              if (!newOwnerId) return;
-              startTransition(async () => {
-                const result = await bulkAssign(ids, newOwnerId);
-                if (result.error) { toast.error(result.error); }
-                else { toast.success('Merchants reassigned.'); setSelected(new Set()); setReassignOpen(false); }
-              });
-            }}
-          >
-            {pending ? 'Saving…' : 'Reassign'}
-          </button>
-        </div>
+      <Modal open={reassignOpen} onClose={() => setReassignOpen(false)} title="Reassign merchants" footer={<>
+        <button className="pill outline" onClick={() => setReassignOpen(false)}>Cancel</button>
+        <button className="pill dark" disabled={!newOwnerId || pending} onClick={() => {
+          if (!newOwnerId) return;
+          startTransition(async () => {
+            const result = await bulkAssign(ids, newOwnerId);
+            if (result.error) { toast.error(result.error); }
+            else { toast.success('Merchants reassigned.'); setSelected(new Set()); setReassignOpen(false); }
+          });
+        }}>{pending ? 'Saving…' : 'Reassign'}</button>
+      </>}>
+        <p style={{ fontSize: 12.5, color: 'var(--ink-3)', margin: '0 0 12px' }}>Reassigning {ids.length} merchant{ids.length !== 1 ? 's' : ''} to:</p>
+        <UserPicker value={newOwnerId} onChange={setNewOwnerId} roles={['acq_specialist', 'acq_manager', 'admin']} />
       </Modal>
 
       {/* Priority modal */}
-      <Modal open={priorityOpen} onClose={() => setPriorityOpen(false)} title="Set priority">
-        <p style={{ fontSize: 12.5, color: 'var(--ink-3)', marginBottom: 12 }}>
-          Set priority for {ids.length} merchant{ids.length !== 1 ? 's' : ''}:
-        </p>
-        <select
-          className="field"
-          value={newPriority}
-          onChange={e => setNewPriority(e.target.value as MerchantPriority)}
-        >
+      <Modal open={priorityOpen} onClose={() => setPriorityOpen(false)} title="Set priority" footer={<>
+        <button className="pill outline" onClick={() => setPriorityOpen(false)}>Cancel</button>
+        <button className="pill dark" disabled={pending} onClick={() => {
+          startTransition(async () => {
+            const result = await bulkSetPriority(ids, newPriority);
+            if (result.error) { toast.error(result.error); }
+            else { toast.success('Priority updated.'); setSelected(new Set()); setPriorityOpen(false); }
+          });
+        }}>{pending ? 'Saving…' : 'Apply'}</button>
+      </>}>
+        <p style={{ fontSize: 12.5, color: 'var(--ink-3)', margin: '0 0 12px' }}>Set priority for {ids.length} merchant{ids.length !== 1 ? 's' : ''}:</p>
+        <select className="field" value={newPriority} onChange={e => setNewPriority(e.target.value as MerchantPriority)}>
           <option value="high">High</option>
           <option value="medium">Medium</option>
           <option value="low">Low</option>
         </select>
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
-          <button className="pill outline" onClick={() => setPriorityOpen(false)}>Cancel</button>
-          <button
-            className="pill dark"
-            disabled={pending}
-            onClick={() => {
-              startTransition(async () => {
-                const result = await bulkSetPriority(ids, newPriority);
-                if (result.error) { toast.error(result.error); }
-                else { toast.success('Priority updated.'); setSelected(new Set()); setPriorityOpen(false); }
-              });
-            }}
-          >
-            {pending ? 'Saving…' : 'Apply'}
-          </button>
-        </div>
       </Modal>
 
       {/* Tag modal */}
-      <Modal open={tagOpen} onClose={() => setTagOpen(false)} title="Add tag">
-        <p style={{ fontSize: 12.5, color: 'var(--ink-3)', marginBottom: 12 }}>
-          Add a tag to {ids.length} merchant{ids.length !== 1 ? 's' : ''}:
-        </p>
-        <input
-          className="field"
-          placeholder="Tag name…"
-          value={newTag}
-          onChange={e => setNewTag(e.target.value)}
-        />
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
-          <button className="pill outline" onClick={() => setTagOpen(false)}>Cancel</button>
-          <button
-            className="pill dark"
-            disabled={!newTag.trim() || pending}
-            onClick={() => {
-              startTransition(async () => {
-                const result = await bulkAddTag(ids, newTag.trim());
-                if (result.error) { toast.error(result.error); }
-                else { toast.success('Tag added.'); setSelected(new Set()); setTagOpen(false); setNewTag(''); }
-              });
-            }}
-          >
-            {pending ? 'Saving…' : 'Add tag'}
-          </button>
-        </div>
+      <Modal open={tagOpen} onClose={() => setTagOpen(false)} title="Add tag" footer={<>
+        <button className="pill outline" onClick={() => setTagOpen(false)}>Cancel</button>
+        <button className="pill dark" disabled={!newTag.trim() || pending} onClick={() => {
+          startTransition(async () => {
+            const result = await bulkAddTag(ids, newTag.trim());
+            if (result.error) { toast.error(result.error); }
+            else { toast.success('Tag added.'); setSelected(new Set()); setTagOpen(false); setNewTag(''); }
+          });
+        }}>{pending ? 'Saving…' : 'Add tag'}</button>
+      </>}>
+        <p style={{ fontSize: 12.5, color: 'var(--ink-3)', margin: '0 0 12px' }}>Add a tag to {ids.length} merchant{ids.length !== 1 ? 's' : ''}:</p>
+        <input className="field" placeholder="Tag name…" value={newTag} onChange={e => setNewTag(e.target.value)} />
       </Modal>
     </>
   );

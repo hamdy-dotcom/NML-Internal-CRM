@@ -1,31 +1,9 @@
 "use client";
 
-import { useState, useCallback, FormEvent, ChangeEvent } from "react";
+import { useState, useEffect, FormEvent } from "react";
 import type { Json, Merchant } from "@/lib/database.types";
 
-// ── Types ────────────────────────────────────────────────────────────────────
-
-interface SchemaField {
-  key: string;
-  label: string;       // Arabic label
-  label_en: string;    // English label
-  type:
-    | "text"
-    | "tel"
-    | "email"
-    | "textarea"
-    | "select"
-    | "multiselect"
-    | "number"
-    | "date"
-    | "file"
-    | "checkbox"
-    | "signature";
-  required: boolean;
-  prefill: boolean;
-  options_from?: string; // kind key in lookups
-}
-
+// Props (schema/lookups kept for page.tsx compat; form uses merchant directly)
 interface PublicFormProps {
   token: string;
   schema: Json;
@@ -33,621 +11,575 @@ interface PublicFormProps {
   lookups: Record<string, { value: string; value_ar: string | null }[]>;
 }
 
-// ── Validation helpers ────────────────────────────────────────────────────────
+// ── Design tokens — exact values from NML-CRM-DESIGN-SYSTEM.html ──────────────
+const INK   = "#1c2536";
+const INK_2 = "#5a6478";
+const INK_3 = "#8a93a5";
+const INK_4 = "#a8b0bf";
+const BLUE  = "#3f7fd6";
+const BLUE_D  = "#1d4f8c";
+const BLUE_BG = "rgba(226,237,251,.85)";
+const GREEN_D  = "#1d5637";
+const GREEN_BG = "rgba(217,240,226,.7)";
+const AMBER    = "#8a5a10";
+const AMBER_BG = "rgba(253,234,204,.72)";
+const RED_D    = "#8c2322";
+const RED_BG   = "rgba(250,214,214,.65)";
+const NML_RED  = "#ed1c24";
 
-function isValidPhone(value: string): boolean {
-  return /^(\+966\d{9}|05\d{8})$/.test(value.trim());
-}
+const WALLPAPER = "linear-gradient(135deg,#bfd8f5 0%,#dfe3f7 28%,#f6d7e2 55%,#fcd9b4 80%,#f8e9d6 100%)";
+const BLUR      = "blur(26px) saturate(1.5)";
+const FONT      = "'IBM Plex Sans Arabic', Inter, system-ui, sans-serif";
 
-function isValidEmail(value: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
-}
+// Shared surface styles
+const phoneCard: React.CSSProperties = {
+  width: "100%",
+  maxWidth: 380,
+  padding: 18,
+  borderRadius: 26,
+  background: "rgba(255,255,255,.55)",
+  backdropFilter: BLUR,
+  WebkitBackdropFilter: BLUR,
+  border: "1px solid rgba(255,255,255,.75)",
+  boxShadow: "0 18px 48px rgba(40,60,110,.18)",
+  boxSizing: "border-box",
+};
 
-// ── NML Logo ─────────────────────────────────────────────────────────────────
+const card: React.CSSProperties = {
+  padding: 12,
+  borderRadius: 15,
+  background: "rgba(255,255,255,.80)",
+  border: "1px solid rgba(255,255,255,.85)",
+};
 
-function NMLLogo() {
+// .field / .field.err
+const fieldBase: React.CSSProperties = {
+  width: "100%",
+  padding: "10px 14px",
+  borderRadius: 13,
+  background: "rgba(255,255,255,.9)",
+  border: "1px solid rgba(255,255,255,1)",
+  fontSize: 12.5,
+  fontFamily: FONT,
+  color: INK,
+  outline: "none",
+  boxSizing: "border-box",
+  display: "block",
+};
+const fieldErrStyle: React.CSSProperties = {
+  ...fieldBase,
+  background: "rgba(250,214,214,.4)",
+  border: "1px solid rgba(163,48,47,.3)",
+};
+
+// ── .mark (NML logo badge) ────────────────────────────────────────────────────
+function Mark() {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: "0.625rem" }}>
-      <div
-        style={{
-          width: "2.25rem",
-          height: "2.25rem",
-          background: "#e02020",
-          borderRadius: "0.375rem",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flexShrink: 0,
-        }}
-      >
-        <span
-          style={{
-            color: "#fff",
-            fontWeight: 700,
-            fontSize: "1.125rem",
-            fontFamily: "serif",
-          }}
-        >
-          N
-        </span>
-      </div>
-      <span
-        style={{
-          fontWeight: 600,
-          fontSize: "1rem",
-          color: "#111827",
-          letterSpacing: "-0.01em",
-        }}
-      >
-        NML CRM
-      </span>
+    <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+      <div style={{
+        width: 28, height: 28, borderRadius: 9,
+        background: NML_RED, color: "#fff",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontSize: 12, fontWeight: 500,
+      }}>N</div>
+      <span style={{ fontSize: 14, fontWeight: 500, color: INK }}>نمل</span>
     </div>
   );
 }
 
-// ── Main component ────────────────────────────────────────────────────────────
-
-export default function PublicForm({ token, schema, merchant, lookups }: PublicFormProps) {
-  const [lang, setLang] = useState<"ar" | "en">("ar");
-  const [values, setValues] = useState<Record<string, unknown>>(() => {
-    // Pre-populate prefilled fields from merchant record
-    const fields = Array.isArray(schema) ? (schema as unknown as SchemaField[]) : [];
-    const initial: Record<string, unknown> = {};
-    for (const field of fields) {
-      if (field.prefill && field.key in merchant) {
-        initial[field.key] = (merchant as Record<string, unknown>)[field.key] ?? "";
-      } else if (field.type === "checkbox") {
-        initial[field.key] = false;
-      } else if (field.type === "multiselect") {
-        initial[field.key] = [];
-      } else {
-        initial[field.key] = "";
-      }
-    }
-    return initial;
-  });
-  const [fileNames, setFileNames] = useState<Record<string, string>>({});
-  const [filePaths, setFilePaths] = useState<Record<string, string>>({});
-  const [uploading, setUploading] = useState<Record<string, boolean>>({});
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-  const [serverError, setServerError] = useState<string | null>(null);
-
-  const isAr = lang === "ar";
-  const fields = Array.isArray(schema) ? (schema as unknown as SchemaField[]) : [];
-
-  // ── Field change handler ─────────────────────────────────────────────────
-
-  const handleChange = useCallback(
-    (key: string, value: unknown) => {
-      setValues((prev) => ({ ...prev, [key]: value }));
-      setErrors((prev) => {
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      });
-    },
-    [],
-  );
-
-  // ── File upload ──────────────────────────────────────────────────────────
-
-  const handleFileChange = useCallback(
-    async (key: string, file: File) => {
-      setUploading((prev) => ({ ...prev, [key]: true }));
-      setErrors((prev) => {
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      });
-      try {
-        const fd = new FormData();
-        fd.append("token", token);
-        fd.append("file", file);
-        const res = await fetch(`/api/form-upload?token=${encodeURIComponent(token)}`, {
-          method: "POST",
-          body: fd,
-        });
-        const json = await res.json();
-        if (!res.ok) {
-          setErrors((prev) => ({
-            ...prev,
-            [key]: json.error ?? "فشل رفع الملف",
-          }));
-        } else {
-          setFilePaths((prev) => ({ ...prev, [key]: json.path }));
-          setFileNames((prev) => ({ ...prev, [key]: file.name }));
-          handleChange(key, json.path);
-        }
-      } catch {
-        setErrors((prev) => ({ ...prev, [key]: "فشل رفع الملف" }));
-      } finally {
-        setUploading((prev) => ({ ...prev, [key]: false }));
-      }
-    },
-    [token, handleChange],
-  );
-
-  // ── Validation ────────────────────────────────────────────────────────────
-
-  const validate = useCallback(() => {
-    const newErrors: Record<string, string> = {};
-    for (const field of fields) {
-      const value = values[field.key];
-      const empty =
-        value === "" ||
-        value === null ||
-        value === undefined ||
-        (Array.isArray(value) && value.length === 0) ||
-        (field.type === "checkbox" && value !== true);
-
-      if (field.required && empty) {
-        newErrors[field.key] = "هذا الحقل مطلوب";
-        continue;
-      }
-
-      if (!empty) {
-        if (field.type === "tel") {
-          const v = String(value);
-          if (v && !isValidPhone(v)) {
-            newErrors[field.key] = "يرجى إدخال رقم هاتف صحيح (+966XXXXXXXXX أو 05XXXXXXXX)";
-          }
-        }
-        if (field.type === "email") {
-          const v = String(value);
-          if (v && !isValidEmail(v)) {
-            newErrors[field.key] = "يرجى إدخال بريد إلكتروني صحيح";
-          }
-        }
-      }
-    }
-    return newErrors;
-  }, [fields, values]);
-
-  // ── Submit ────────────────────────────────────────────────────────────────
-
-  const handleSubmit = useCallback(
-    async (e: FormEvent) => {
-      e.preventDefault();
-      const validationErrors = validate();
-      if (Object.keys(validationErrors).length > 0) {
-        setErrors(validationErrors);
-        const firstKey = Object.keys(validationErrors)[0];
-        const el = document.getElementById(`field-${firstKey}`);
-        el?.scrollIntoView({ behavior: "smooth", block: "center" });
-        return;
-      }
-
-      setSubmitting(true);
-      setServerError(null);
-
-      try {
-        const res = await fetch("/api/form-submit", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token, data: values, files: filePaths }),
-        });
-        const json = await res.json();
-        if (!res.ok) {
-          setServerError(json.error ?? "حدث خطأ أثناء الإرسال");
-        } else {
-          setSubmitted(true);
-        }
-      } catch {
-        setServerError("حدث خطأ في الاتصال، يرجى المحاولة مجدداً");
-      } finally {
-        setSubmitting(false);
-      }
-    },
-    [validate, token, values, filePaths],
-  );
-
-  // ── Success screen ────────────────────────────────────────────────────────
-
-  if (submitted) {
-    return (
-      <div
-        dir={isAr ? "rtl" : "ltr"}
-        style={{
-          minHeight: "100svh",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "#f9fafb",
-          padding: "2rem",
-          fontFamily: "system-ui, sans-serif",
-        }}
-      >
-        <div
-          style={{
-            background: "#fff",
-            borderRadius: "1rem",
-            padding: "2.5rem",
-            maxWidth: "30rem",
-            width: "100%",
-            textAlign: "center",
-            boxShadow: "0 1px 3px rgba(0,0,0,.08), 0 4px 16px rgba(0,0,0,.06)",
-          }}
-        >
-          <div style={{ fontSize: "4rem", marginBottom: "1rem" }}>✅</div>
-          <h2 style={{ fontSize: "1.5rem", fontWeight: 700, color: "#111827", marginBottom: "0.75rem" }}>
-            {isAr ? "تم الإرسال بنجاح!" : "Submitted successfully!"}
-          </h2>
-          <p style={{ color: "#6b7280", fontSize: "0.9375rem", lineHeight: 1.7, marginBottom: "1.5rem" }}>
-            {isAr
-              ? "شكراً لك! استلمنا بياناتك بنجاح."
-              : "Thank you! We have received your details."}
-          </p>
-          <div
-            style={{
-              background: "#f0fdf4",
-              border: "1px solid #bbf7d0",
-              borderRadius: "0.75rem",
-              padding: "1.25rem",
-              textAlign: isAr ? "right" : "left",
-            }}
-          >
-            <p style={{ fontWeight: 600, color: "#166534", marginBottom: "0.5rem", fontSize: "0.875rem" }}>
-              {isAr ? "ماذا سيحدث بعد ذلك؟" : "What happens next?"}
-            </p>
-            <ol style={{ margin: 0, paddingInlineStart: "1.25rem", color: "#15803d", fontSize: "0.875rem", lineHeight: 2 }}>
-              <li>{isAr ? "سيراجع فريقنا بياناتك خلال يوم عمل واحد" : "Our team will review your details within one business day"}</li>
-              <li>{isAr ? "سيتواصل معك ممثل NML لتأكيد الخطوات التالية" : "Your NML representative will contact you to confirm next steps"}</li>
-              <li>{isAr ? "سيُرسل إليك رابط إتمام التسجيل على المنصة" : "You'll receive a platform registration link to complete onboarding"}</li>
-            </ol>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // ── Shared input style ────────────────────────────────────────────────────
-
-  const inputStyle = (hasError: boolean): React.CSSProperties => ({
-    width: "100%",
-    padding: "0.625rem 0.875rem",
-    border: `1.5px solid ${hasError ? "#ef4444" : "#d1d5db"}`,
-    borderRadius: "0.5rem",
-    fontSize: "0.9375rem",
-    outline: "none",
-    boxSizing: "border-box",
-    fontFamily: "inherit",
-    color: "#111827",
-    background: "#fff",
-    transition: "border-color 0.15s",
-  });
-
-  // ── Render field ──────────────────────────────────────────────────────────
-
-  function renderField(field: SchemaField) {
-    const label = isAr ? field.label : field.label_en;
-    const error = errors[field.key];
-    const value = values[field.key];
-    const options = field.options_from ? (lookups[field.options_from] ?? []) : [];
-
-    return (
-      <div key={field.key} style={{ marginBottom: "1.25rem" }}>
-        <label
-          htmlFor={`field-${field.key}`}
-          style={{
-            display: "block",
-            fontSize: "0.875rem",
-            fontWeight: 500,
-            color: "#374151",
-            marginBottom: "0.375rem",
-          }}
-        >
-          {label}
-          {field.required && (
-            <span style={{ color: "#ef4444", marginInlineStart: "0.25rem" }}>*</span>
-          )}
-        </label>
-
-        {/* text / tel / email / number / date */}
-        {["text", "tel", "email", "number", "date"].includes(field.type) && (
-          <input
-            id={`field-${field.key}`}
-            type={field.type === "tel" ? "tel" : field.type === "email" ? "email" : field.type === "number" ? "number" : field.type === "date" ? "date" : "text"}
-            value={String(value ?? "")}
-            onChange={(e: ChangeEvent<HTMLInputElement>) => handleChange(field.key, e.target.value)}
-            style={inputStyle(!!error)}
-            dir={field.type === "tel" || field.type === "number" || field.type === "date" ? "ltr" : undefined}
-          />
-        )}
-
-        {/* textarea */}
-        {field.type === "textarea" && (
-          <textarea
-            id={`field-${field.key}`}
-            value={String(value ?? "")}
-            onChange={(e: ChangeEvent<HTMLTextAreaElement>) => handleChange(field.key, e.target.value)}
-            rows={4}
-            style={{ ...inputStyle(!!error), resize: "vertical" }}
-          />
-        )}
-
-        {/* select */}
-        {field.type === "select" && (
-          <select
-            id={`field-${field.key}`}
-            value={String(value ?? "")}
-            onChange={(e: ChangeEvent<HTMLSelectElement>) => handleChange(field.key, e.target.value)}
-            style={{ ...inputStyle(!!error), cursor: "pointer" }}
-          >
-            <option value="">{isAr ? "اختر..." : "Select..."}</option>
-            {options.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {isAr && opt.value_ar ? opt.value_ar : opt.value}
-              </option>
-            ))}
-          </select>
-        )}
-
-        {/* multiselect */}
-        {field.type === "multiselect" && (
-          <div
-            style={{
-              border: `1.5px solid ${error ? "#ef4444" : "#d1d5db"}`,
-              borderRadius: "0.5rem",
-              padding: "0.5rem",
-              display: "flex",
-              flexWrap: "wrap",
-              gap: "0.375rem",
-            }}
-          >
-            {options.map((opt) => {
-              const selected = Array.isArray(value) && value.includes(opt.value);
-              return (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => {
-                    const current = Array.isArray(value) ? value : [];
-                    handleChange(
-                      field.key,
-                      selected ? current.filter((v) => v !== opt.value) : [...current, opt.value],
-                    );
-                  }}
-                  style={{
-                    padding: "0.25rem 0.75rem",
-                    borderRadius: "2rem",
-                    border: `1.5px solid ${selected ? "#e02020" : "#d1d5db"}`,
-                    background: selected ? "#fee2e2" : "#f9fafb",
-                    color: selected ? "#b91c1c" : "#374151",
-                    fontSize: "0.8125rem",
-                    fontWeight: selected ? 600 : 400,
-                    cursor: "pointer",
-                    fontFamily: "inherit",
-                  }}
-                >
-                  {isAr && opt.value_ar ? opt.value_ar : opt.value}
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {/* file */}
-        {field.type === "file" && (
-          <div>
-            <label
-              htmlFor={`field-${field.key}`}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "0.5rem",
-                padding: "0.5rem 1rem",
-                border: `1.5px dashed ${error ? "#ef4444" : "#d1d5db"}`,
-                borderRadius: "0.5rem",
-                cursor: "pointer",
-                fontSize: "0.875rem",
-                color: "#6b7280",
-                background: "#f9fafb",
-                width: "100%",
-                boxSizing: "border-box",
-                justifyContent: "center",
-              }}
-            >
-              {uploading[field.key] ? (
-                <>{isAr ? "جاري الرفع..." : "Uploading..."}</>
-              ) : fileNames[field.key] ? (
-                <>{fileNames[field.key]}</>
-              ) : (
-                <>{isAr ? "اختر ملفاً" : "Choose a file"}</>
-              )}
-            </label>
-            <input
-              id={`field-${field.key}`}
-              type="file"
-              style={{ display: "none" }}
-              onChange={(e: ChangeEvent<HTMLInputElement>) => {
-                const file = e.target.files?.[0];
-                if (file) handleFileChange(field.key, file);
-              }}
-            />
-          </div>
-        )}
-
-        {/* checkbox (consent) */}
-        {field.type === "checkbox" && (
-          <label
-            style={{
-              display: "flex",
-              alignItems: "flex-start",
-              gap: "0.625rem",
-              cursor: "pointer",
-            }}
-          >
-            <input
-              id={`field-${field.key}`}
-              type="checkbox"
-              checked={value === true}
-              onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                handleChange(field.key, e.target.checked)
-              }
-              style={{ marginTop: "0.25rem", accentColor: "#e02020", flexShrink: 0 }}
-            />
-            <span style={{ fontSize: "0.875rem", color: "#374151", lineHeight: 1.6 }}>
-              {label}
-            </span>
-          </label>
-        )}
-
-        {/* signature */}
-        {field.type === "signature" && (
-          <div>
-            <input
-              id={`field-${field.key}`}
-              type="text"
-              placeholder={isAr ? "اكتب اسمك الكامل بالعربي" : "Type your full name"}
-              value={String(value ?? "")}
-              onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                handleChange(field.key, e.target.value)
-              }
-              style={{ ...inputStyle(!!error), fontStyle: "italic" }}
-            />
-            {!!value && (
-              <p style={{ fontSize: "0.75rem", color: "#9ca3af", marginTop: "0.25rem", marginBottom: 0 }}>
-                {isAr ? "التوقيع الإلكتروني — " : "Electronic signature — "}
-                {new Date().toLocaleString(isAr ? "ar-SA" : "en-US")}
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* error message */}
-        {error && (
-          <p style={{ color: "#ef4444", fontSize: "0.8125rem", marginTop: "0.25rem", marginBottom: 0 }}>
-            {error}
-          </p>
-        )}
-      </div>
-    );
-  }
-
-  // ── Form ──────────────────────────────────────────────────────────────────
-
+// ── Wallpaper shell (blobs + gradient) ────────────────────────────────────────
+function WallShell({ dir, children }: { dir: "rtl" | "ltr"; children: React.ReactNode }) {
   return (
     <div
-      dir={isAr ? "rtl" : "ltr"}
+      dir={dir}
       style={{
         minHeight: "100svh",
-        background: "#f3f4f6",
-        fontFamily: "system-ui, -apple-system, sans-serif",
-        padding: "1.5rem 1rem 4rem",
+        background: WALLPAPER,
+        fontFamily: FONT,
+        position: "relative",
+        overflow: "hidden",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        padding: "1.25rem 1rem 4rem",
       }}
     >
-      {/* Header */}
-      <header
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          maxWidth: "36rem",
-          margin: "0 auto 1.5rem",
-          padding: "0.75rem 1rem",
-          background: "#fff",
-          borderRadius: "0.75rem",
-          boxShadow: "0 1px 2px rgba(0,0,0,.06)",
-        }}
-      >
-        <NMLLogo />
-        <button
-          type="button"
-          onClick={() => setLang(isAr ? "en" : "ar")}
-          style={{
-            padding: "0.375rem 0.875rem",
-            border: "1.5px solid #e5e7eb",
-            borderRadius: "0.5rem",
-            background: "#fff",
-            fontSize: "0.8125rem",
-            fontWeight: 600,
-            cursor: "pointer",
-            color: "#374151",
-            fontFamily: "inherit",
-          }}
-        >
-          {isAr ? "EN" : "عربي"}
-        </button>
-      </header>
+      {/* blob.a — top-right orange */}
+      <div style={{
+        position: "absolute", top: -80, right: -50,
+        width: 320, height: 320, borderRadius: "50%",
+        background: "#ff9a5b", opacity: .42, filter: "blur(70px)",
+        pointerEvents: "none",
+      }} />
+      {/* blob.b — bottom-left blue */}
+      <div style={{
+        position: "absolute", bottom: -100, left: -60,
+        width: 340, height: 340, borderRadius: "50%",
+        background: "#5b9bf5", opacity: .32, filter: "blur(80px)",
+        pointerEvents: "none",
+      }} />
+      {children}
+    </div>
+  );
+}
 
-      {/* Form card */}
-      <form
-        onSubmit={handleSubmit}
-        noValidate
+// ── Header row (logo + lang toggle) ──────────────────────────────────────────
+function Header({ isAr, onToggle }: { isAr: boolean; onToggle: () => void }) {
+  return (
+    <div style={{
+      width: "100%", maxWidth: 380, zIndex: 1,
+      display: "flex", alignItems: "center", justifyContent: "space-between",
+      marginBottom: 14,
+    }}>
+      <Mark />
+      <button
+        type="button"
+        onClick={onToggle}
         style={{
-          maxWidth: "36rem",
-          margin: "0 auto",
-          background: "#fff",
-          borderRadius: "1rem",
-          padding: "2rem 1.75rem",
-          boxShadow: "0 1px 3px rgba(0,0,0,.08), 0 4px 16px rgba(0,0,0,.06)",
+          padding: "5px 12px", borderRadius: 999,
+          background: "rgba(255,255,255,.85)", border: "none",
+          fontSize: 12, fontWeight: 500, cursor: "pointer",
+          color: INK, fontFamily: FONT,
         }}
       >
-        <h1
-          style={{
-            fontSize: "1.25rem",
-            fontWeight: 700,
-            color: "#111827",
-            marginBottom: "0.375rem",
-            marginTop: 0,
-          }}
-        >
-          {isAr ? "نموذج بيانات التاجر" : "Merchant Information Form"}
-        </h1>
-        <p style={{ color: "#6b7280", fontSize: "0.875rem", marginBottom: "1.75rem", marginTop: 0 }}>
+        {isAr ? "English" : "عربي"}
+      </button>
+    </div>
+  );
+}
+
+// ── Main ──────────────────────────────────────────────────────────────────────
+export default function PublicForm({ token, merchant }: PublicFormProps) {
+  const [lang, setLang] = useState<"ar" | "en">("ar");
+  const [editingConfirm, setEditingConfirm] = useState(false);
+
+  // Prefilled confirm fields
+  const [storeName, setStoreName] = useState(String(merchant.store_name ?? ""));
+  const [ownerName, setOwnerName] = useState(String(merchant.owner_name ?? ""));
+  const [phone, setPhone]         = useState(String(merchant.phone ?? ""));
+  const [email, setEmail]         = useState(String(merchant.email ?? ""));
+
+  // New fields
+  const [productsCount, setProductsCount] = useState("");
+  const [notes, setNotes]                 = useState("");
+  const [consent, setConsent]             = useState(false);
+
+  const [errors, setErrors]         = useState<Record<string, string>>({});
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted]   = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
+
+  // Load IBM Plex Sans Arabic
+  useEffect(() => {
+    const link = document.createElement("link");
+    link.rel  = "stylesheet";
+    link.href = "https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500&display=swap";
+    document.head.appendChild(link);
+    return () => { try { document.head.removeChild(link); } catch { /* noop */ } };
+  }, []);
+
+  const isAr = lang === "ar";
+
+  function clearErr(key: string) {
+    setErrors(p => { const n = { ...p }; delete n[key]; return n; });
+  }
+
+  function validate() {
+    const e: Record<string, string> = {};
+    const req = isAr ? "هذا الحقل مطلوب" : "Required";
+    if (!storeName.trim()) e.store_name = req;
+    if (!ownerName.trim()) e.owner_name = req;
+    if (!phone.trim())     e.phone = req;
+    if (!productsCount.trim() || isNaN(Number(productsCount)) || Number(productsCount) < 0)
+      e.products_ready_count = isAr ? "يرجى إدخال عدداً صحيحاً" : "Please enter a valid number";
+    if (!consent)
+      e.consent = isAr ? "يجب الموافقة للمتابعة" : "You must agree to continue";
+    return e;
+  }
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    const errs = validate();
+    if (Object.keys(errs).length) {
+      setErrors(errs);
+      const firstKey = Object.keys(errs)[0];
+      document.getElementById(`field-${firstKey}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+    setSubmitting(true);
+    setServerError(null);
+    try {
+      const res = await fetch("/api/form-submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token,
+          data: {
+            store_name: storeName.trim(),
+            owner_name: ownerName.trim(),
+            phone: phone.trim(),
+            email: email.trim() || null,
+            products_ready_count: Number(productsCount),
+            notes: notes.trim() || null,
+            consent: true,
+          },
+          files: {},
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) setServerError(json.error ?? (isAr ? "حدث خطأ أثناء الإرسال" : "Submission error"));
+      else setSubmitted(true);
+    } catch {
+      setServerError(isAr ? "حدث خطأ في الاتصال، يرجى المحاولة مجدداً" : "Connection error — please try again");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  // ── kv row ────────────────────────────────────────────────────────────────────
+  function kvRow(label: string, value: string, mono = false) {
+    return (
+      <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", fontSize: 12.5 }}>
+        <span style={{ color: INK_3 }}>{label}</span>
+        <span style={{ color: INK, fontFamily: mono ? "'JetBrains Mono', monospace" : FONT }}>{value || "—"}</span>
+      </div>
+    );
+  }
+
+  // ── Inline error ──────────────────────────────────────────────────────────────
+  function inlineErr(key: string) {
+    return errors[key] ? (
+      <p style={{ color: RED_D, fontSize: 11.5, margin: "3px 0 0", padding: 0 }}>{errors[key]}</p>
+    ) : null;
+  }
+
+  // ── lbl helper ────────────────────────────────────────────────────────────────
+  function lbl(text: string, required = false, optional = false) {
+    return (
+      <div style={{ fontSize: 11.5, color: INK_2, marginBottom: 5 }}>
+        {text}
+        {required && <span style={{ color: NML_RED, marginInlineStart: 2 }}>*</span>}
+        {optional && <span style={{ color: INK_4, marginInlineStart: 6 }}>{isAr ? "(اختياري)" : "(optional)"}</span>}
+      </div>
+    );
+  }
+
+  // ── Success screen ────────────────────────────────────────────────────────────
+  if (submitted) {
+    return (
+      <WallShell dir={isAr ? "rtl" : "ltr"}>
+        <Header isAr={isAr} onToggle={() => setLang(isAr ? "en" : "ar")} />
+        <div style={{ ...phoneCard, zIndex: 1 }}>
+          <div style={{
+            width: 48, height: 48, borderRadius: 16,
+            background: GREEN_BG,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            marginBottom: 14,
+          }}>
+            <span style={{ fontSize: 24, color: GREEN_D }}>✓</span>
+          </div>
+          <div style={{ fontSize: 16, fontWeight: 500, color: INK, marginBottom: 7 }}>
+            {isAr ? "تم استلام طلبك" : "Request received"}
+          </div>
+          <div style={{ fontSize: 13, color: INK_2, lineHeight: 1.7, marginBottom: 15 }}>
+            {isAr
+              ? "أصبح متجرك ضمن شركاء نمل. هذه الخطوات القادمة:"
+              : "Your store is now a NML partner. Here are the next steps:"}
+          </div>
+          {[
+            {
+              n: isAr ? "١" : "1",
+              t: isAr ? "مكالمة ترحيبية" : "Welcome call",
+              s: isAr ? "خلال يوم عمل" : "Within one business day",
+              active: true,
+            },
+            {
+              n: isAr ? "٢" : "2",
+              t: isAr ? "مراجعة المنتجات" : "Product review",
+              s: isAr ? "مراجعة منتجاتك المرفوعة" : "Your submitted products reviewed",
+              active: false,
+            },
+            {
+              n: isAr ? "٣" : "3",
+              t: isAr ? "عرض منتجاتك في الفروع" : "Products live in branches",
+              s: isAr ? "بعد الاتفاق على الأسعار" : "After pricing is agreed",
+              active: false,
+            },
+          ].map(step => (
+            <div key={step.n} style={{ ...card, display: "flex", gap: 10, marginBottom: 7 }}>
+              <div style={{
+                width: 28, height: 28, borderRadius: 999, flexShrink: 0,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                background: step.active ? INK : "rgba(120,135,160,.25)",
+                color: step.active ? "#fff" : INK_2,
+                fontSize: 12, fontWeight: 600,
+              }}>{step.n}</div>
+              <div>
+                <div style={{ fontSize: 12.5, color: INK }}>{step.t}</div>
+                <div style={{ fontSize: 11.5, color: INK_3 }}>{step.s}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </WallShell>
+    );
+  }
+
+  // ── Form ──────────────────────────────────────────────────────────────────────
+  return (
+    <WallShell dir={isAr ? "rtl" : "ltr"}>
+      <Header isAr={isAr} onToggle={() => setLang(isAr ? "en" : "ar")} />
+
+      <form onSubmit={handleSubmit} noValidate style={{ ...phoneCard, zIndex: 1 }}>
+        {/* Title */}
+        <div style={{ fontSize: 16, fontWeight: 500, color: INK, marginBottom: 6 }}>
+          {isAr ? "تأكيد الشراكة مع نمل" : "NML Partnership Confirmation"}
+        </div>
+        <div style={{ fontSize: 13, color: INK_2, lineHeight: 1.7, marginBottom: 15 }}>
           {isAr
-            ? "يرجى تعبئة جميع الحقول المطلوبة بعناية"
-            : "Please fill in all required fields carefully"}
-        </p>
+            ? "راجع بيانات متجرك وأكمل الناقص. التعبئة تستغرق دقيقتين."
+            : "Review your store details and fill in the rest. Takes two minutes."}
+        </div>
 
-        {fields.map(renderField)}
+        {/* ── Confirm block (.card) ── */}
+        <div style={{ ...card, marginBottom: 10 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 9 }}>
+            <span style={{ fontSize: 12.5, color: INK }}>
+              {isAr ? "بيانات متجرك" : "Your store details"}
+            </span>
+            <span style={{
+              display: "inline-block", fontSize: 11, padding: "3px 10px", borderRadius: 999,
+              background: GREEN_BG, color: GREEN_D, whiteSpace: "nowrap",
+            }}>
+              {isAr ? "من سلة" : "From Salla"}
+            </span>
+          </div>
 
-        {/* Server error */}
+          {editingConfirm ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {[
+                { id: "store_name", ar: "اسم المتجر",          en: "Store name",      val: storeName, set: setStoreName, dir: undefined as "ltr" | undefined },
+                { id: "owner_name", ar: "المسؤول",             en: "Contact person",  val: ownerName, set: setOwnerName, dir: undefined as "ltr" | undefined },
+                { id: "phone",      ar: "الجوال",              en: "Mobile",          val: phone,     set: setPhone,     dir: "ltr" as const },
+                { id: "email",      ar: "البريد الإلكتروني",   en: "Email",           val: email,     set: setEmail,     dir: "ltr" as const },
+              ].map(f => (
+                <div key={f.id}>
+                  {lbl(isAr ? f.ar : f.en, f.id !== "email")}
+                  <input
+                    type="text"
+                    dir={f.dir}
+                    value={f.val}
+                    onChange={e => { f.set(e.target.value); clearErr(f.id); }}
+                    style={errors[f.id] ? fieldErrStyle : fieldBase}
+                  />
+                  {inlineErr(f.id)}
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() => {
+                  const e: Record<string, string> = {};
+                  const req = isAr ? "مطلوب" : "Required";
+                  if (!storeName.trim()) e.store_name = req;
+                  if (!ownerName.trim()) e.owner_name = req;
+                  if (!phone.trim())     e.phone = req;
+                  if (Object.keys(e).length) { setErrors(prev => ({ ...prev, ...e })); return; }
+                  setEditingConfirm(false);
+                }}
+                style={{
+                  padding: "7px 16px", background: INK, color: "#fff",
+                  border: "none", borderRadius: 999, fontSize: 12.5,
+                  fontWeight: 500, cursor: "pointer", fontFamily: FONT,
+                  alignSelf: "flex-end",
+                }}
+              >
+                {isAr ? "تأكيد" : "Confirm"}
+              </button>
+            </div>
+          ) : (
+            <>
+              {kvRow(isAr ? "اسم المتجر" : "Store name",     storeName)}
+              {kvRow(isAr ? "المسؤول" : "Contact person",    ownerName)}
+              {kvRow(isAr ? "الجوال" : "Mobile",             phone, true)}
+              {email && kvRow(isAr ? "البريد الإلكتروني" : "Email", email)}
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => setEditingConfirm(true)}
+                onKeyDown={e => e.key === "Enter" && setEditingConfirm(true)}
+                style={{ fontSize: 11.5, color: BLUE, marginTop: 8, cursor: "pointer" }}
+              >
+                {isAr ? "تعديل البيانات" : "Edit details"}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* ── Products count ── */}
+        <div style={{ marginBottom: 10 }}>
+          {lbl(
+            isAr ? "كم عدد المنتجات الجاهزة لنمل؟" : "How many products are ready for NML?",
+            true,
+          )}
+          <input
+            id="field-products_ready_count"
+            type="number"
+            min="0"
+            dir="ltr"
+            value={productsCount}
+            onChange={e => { setProductsCount(e.target.value); clearErr("products_ready_count"); }}
+            placeholder="0"
+            style={errors.products_ready_count ? fieldErrStyle : fieldBase}
+          />
+          {inlineErr("products_ready_count")}
+        </div>
+
+        {/* ── Notes ── */}
+        <div style={{ marginBottom: 10 }}>
+          {lbl(isAr ? "ملاحظات أو استفسارات" : "Notes or questions", false, true)}
+          <textarea
+            id="field-notes"
+            rows={3}
+            value={notes}
+            onChange={e => setNotes(e.target.value)}
+            placeholder={isAr ? "اكتب ملاحظاتك هنا…" : "Type your notes here…"}
+            style={{ ...fieldBase, resize: "vertical" }}
+          />
+        </div>
+
+        {/* ── Consent (.card) ── */}
+        <label
+          htmlFor="field-consent"
+          style={{
+            ...card,
+            display: "flex", gap: 10, alignItems: "flex-start",
+            marginBottom: errors.consent ? 4 : 13, cursor: "pointer",
+            border: errors.consent
+              ? "1px solid rgba(163,48,47,.35)"
+              : "1px solid rgba(255,255,255,.85)",
+          }}
+        >
+          <input
+            id="field-consent"
+            type="checkbox"
+            checked={consent}
+            onChange={e => { setConsent(e.target.checked); clearErr("consent"); }}
+            style={{ marginTop: 2, accentColor: INK, flexShrink: 0, cursor: "pointer" }}
+          />
+          <span style={{ fontSize: 12, color: INK_2, lineHeight: 1.6 }}>
+            {isAr
+              ? "أوافق على الشراكة مع نمل عبر منصة سلة"
+              : "I agree with the partnership with NML through Salla Platform"}
+            <span style={{ display: "block", fontSize: 11, color: INK_4, marginTop: 1 }}>
+              {isAr
+                ? "I agree with the partnership with NML through Salla Platform"
+                : "أوافق على الشراكة مع نمل عبر منصة سلة"}
+            </span>
+          </span>
+        </label>
+        {errors.consent && (
+          <p style={{ color: RED_D, fontSize: 11.5, margin: "0 0 10px" }}>{errors.consent}</p>
+        )}
+
+        {/* ── Server error ── */}
         {serverError && (
-          <div
-            style={{
-              background: "#fef2f2",
-              border: "1.5px solid #fca5a5",
-              borderRadius: "0.5rem",
-              padding: "0.75rem 1rem",
-              color: "#b91c1c",
-              fontSize: "0.875rem",
-              marginBottom: "1rem",
-            }}
-          >
+          <div style={{
+            padding: "8px 12px", borderRadius: 10, marginBottom: 10,
+            background: RED_BG, color: RED_D, fontSize: 12.5,
+          }}>
             {serverError}
           </div>
         )}
 
-        {/* Submit button */}
+        {/* ── Submit (.pill.dark) ── */}
         <button
           type="submit"
           disabled={submitting}
           style={{
             width: "100%",
-            padding: "0.75rem",
-            background: submitting ? "#9ca3af" : "#e02020",
+            padding: "12px 0",
+            background: submitting ? "rgba(120,135,160,.5)" : INK,
             color: "#fff",
             border: "none",
-            borderRadius: "0.625rem",
-            fontSize: "1rem",
-            fontWeight: 600,
+            borderRadius: 999,
+            fontSize: 14,
+            fontWeight: 500,
             cursor: submitting ? "not-allowed" : "pointer",
-            fontFamily: "inherit",
-            transition: "background 0.15s",
+            fontFamily: FONT,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            marginBottom: 10,
           }}
         >
           {submitting
-            ? isAr
-              ? "جاري الإرسال..."
-              : "Submitting..."
-            : isAr
-              ? "إرسال النموذج"
-              : "Submit form"}
+            ? (isAr ? "جاري الإرسال..." : "Submitting…")
+            : (isAr ? "إرسال والانضمام لنمل" : "Submit and join NML")}
         </button>
       </form>
+    </WallShell>
+  );
+}
+
+// ── Static wall screen (used by page.tsx for error/expired states) ─────────────
+// Exported so page.tsx can use the same wallpaper + card without importing hooks
+
+export { Mark };
+
+interface WallScreenProps {
+  dir?: "rtl" | "ltr";
+  icon: React.ReactNode;
+  iconBg: string;
+  title: string;
+  body: string;
+  extra?: React.ReactNode;
+}
+
+export function WallScreen({ dir = "rtl", icon, iconBg, title, body, extra }: WallScreenProps) {
+  return (
+    <div
+      dir={dir}
+      style={{
+        minHeight: "100svh",
+        background: WALLPAPER,
+        fontFamily: FONT,
+        position: "relative",
+        overflow: "hidden",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "2rem 1rem",
+      }}
+    >
+      <div style={{ position: "absolute", top: -80, right: -50, width: 320, height: 320, borderRadius: "50%", background: "#ff9a5b", opacity: .42, filter: "blur(70px)", pointerEvents: "none" }} />
+      <div style={{ position: "absolute", bottom: -100, left: -60, width: 340, height: 340, borderRadius: "50%", background: "#5b9bf5", opacity: .32, filter: "blur(80px)", pointerEvents: "none" }} />
+
+      <div style={{ ...phoneCard, zIndex: 1 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 18 }}>
+          <div style={{
+            width: 28, height: 28, borderRadius: 9,
+            background: NML_RED, color: "#fff",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 12, fontWeight: 500,
+          }}>N</div>
+          <span style={{ fontSize: 14, fontWeight: 500, color: INK }}>نمل</span>
+        </div>
+        <div style={{
+          width: 48, height: 48, borderRadius: 16,
+          background: iconBg,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          marginBottom: 14,
+        }}>
+          {icon}
+        </div>
+        <div style={{ fontSize: 16, fontWeight: 500, color: INK, marginBottom: 7 }}>{title}</div>
+        <div style={{ fontSize: 13, color: INK_2, lineHeight: 1.7, marginBottom: extra ? 14 : 0 }}>{body}</div>
+        {extra}
+      </div>
     </div>
   );
 }
+
+// Export tokens for page.tsx
+export { AMBER_BG, AMBER, RED_BG, RED_D, BLUE_BG, BLUE_D, GREEN_BG, GREEN_D, INK, INK_2, INK_3, NML_RED };

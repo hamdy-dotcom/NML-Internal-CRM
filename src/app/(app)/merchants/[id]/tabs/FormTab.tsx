@@ -139,7 +139,18 @@ export default function FormTab({ merchant, formLinks, formTemplates, formSubmis
       )}
 
       {/* Send form modal */}
-      <Modal open={sendOpen} onClose={() => setSendOpen(false)} title="Send form">
+      <Modal open={sendOpen} onClose={() => setSendOpen(false)} title="Send form" footer={<>
+        <button className="pill outline" onClick={() => setSendOpen(false)}>Cancel</button>
+        <button className="pill dark" disabled={!selectedTemplate || pending} onClick={() => {
+          startTransition(async () => {
+            const res = await sendForm(merchant.id, selectedTemplate, channel);
+            if (res.error) toast.error(res.error);
+            else { toast.success('Form link created.'); setSendOpen(false); }
+          });
+        }}>
+          {pending ? 'Sending…' : 'Send form'}
+        </button>
+      </>}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div>
             <label className="field-label">Form template</label>
@@ -161,22 +172,6 @@ export default function FormTab({ merchant, formLinks, formTemplates, formSubmis
               <option value="sms">SMS</option>
               <option value="other">Other</option>
             </select>
-          </div>
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
-            <button className="pill outline" onClick={() => setSendOpen(false)}>Cancel</button>
-            <button
-              className="pill dark"
-              disabled={!selectedTemplate || pending}
-              onClick={() => {
-                startTransition(async () => {
-                  const res = await sendForm(merchant.id, selectedTemplate, channel);
-                  if (res.error) toast.error(res.error);
-                  else { toast.success('Form link created.'); setSendOpen(false); }
-                });
-              }}
-            >
-              {pending ? 'Sending…' : 'Send form'}
-            </button>
           </div>
         </div>
       </Modal>

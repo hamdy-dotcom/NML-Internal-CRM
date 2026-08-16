@@ -2,52 +2,16 @@ export const dynamic = "force-dynamic";
 
 import { adminClient } from "@/lib/supabase/admin";
 import type { FormLink, FormTemplate, Merchant, Lookup } from "@/lib/database.types";
-import PublicForm from "./PublicForm";
+import PublicForm, { WallScreen } from "./PublicForm";
 
 interface PageProps {
   params: Promise<{ token: string }>;
-}
-
-// ── Error screen ────────────────────────────────────────────────────────────
-function ErrorScreen({ message }: { message: string }) {
-  return (
-    <div
-      dir="rtl"
-      style={{
-        minHeight: "100svh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        fontFamily: "system-ui, sans-serif",
-        background: "#f9fafb",
-        padding: "2rem",
-      }}
-    >
-      <div
-        style={{
-          background: "#fff",
-          borderRadius: "1rem",
-          padding: "2.5rem",
-          maxWidth: "28rem",
-          width: "100%",
-          textAlign: "center",
-          boxShadow: "0 1px 3px rgba(0,0,0,.08), 0 4px 16px rgba(0,0,0,.06)",
-        }}
-      >
-        <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>⚠️</div>
-        <p style={{ color: "#374151", fontSize: "1rem", lineHeight: 1.6, margin: 0 }}>
-          {message}
-        </p>
-      </div>
-    </div>
-  );
 }
 
 // ── Page ────────────────────────────────────────────────────────────────────
 export default async function PublicFormPage({ params }: PageProps) {
   const { token } = await params;
 
-  // 1. Resolve form link with joined template + merchant
   type FormLinkRow = FormLink & {
     form_templates: FormTemplate;
     merchants: Merchant;
@@ -61,30 +25,56 @@ export default async function PublicFormPage({ params }: PageProps) {
 
   if (linkError || !link) {
     return (
-      <ErrorScreen message="هذا الرابط لم يعد صالحاً — تواصل مع ممثل NML الخاص بك. This link is no longer valid — contact your NML representative." />
+      <WallScreen
+        dir="rtl"
+        icon={<span style={{ fontSize: 24 }}>⚠</span>}
+        iconBg="rgba(250,214,214,.65)"
+        title="الرابط غير صالح"
+        body="هذا الرابط لم يعد صالحاً — تواصل مع ممثل NML الخاص بك. This link is no longer valid — contact your NML representative."
+      />
     );
   }
 
-  // 2. Expired
+  // Expired
   if (new Date(link.expires_at) < new Date()) {
     return (
-      <ErrorScreen message="انتهت صلاحية هذا الرابط. يرجى التواصل مع ممثل NML للحصول على رابط جديد. This link has expired — please contact your NML representative for a new one." />
+      <WallScreen
+        dir="rtl"
+        icon={<span style={{ fontSize: 24, color: "#8a5a10" }}>⏱</span>}
+        iconBg="rgba(253,234,204,.72)"
+        title="انتهت صلاحية الرابط"
+        body="هذا الرابط صالح لمدة ٣٠ يوماً وقد انتهت مدته. اطلب رابطاً جديداً من مسؤول الحساب."
+      />
     );
   }
 
-  // 3. Revoked
+  // Revoked
   if (link.status === "revoked") {
-    return <ErrorScreen message="تم إلغاء تفعيل هذا الرابط. This link has been deactivated." />;
+    return (
+      <WallScreen
+        dir="rtl"
+        icon={<span style={{ fontSize: 24, color: "#8c2322" }}>✕</span>}
+        iconBg="rgba(250,214,214,.65)"
+        title="تم إلغاء الرابط"
+        body="تم إلغاء تفعيل هذا الرابط. This link has been deactivated."
+      />
+    );
   }
 
-  // 4. Already submitted
+  // Already submitted
   if (link.status === "submitted") {
     return (
-      <ErrorScreen message="شكراً! تم استلام نموذجك بنجاح. Thank you! Your form has already been submitted." />
+      <WallScreen
+        dir="rtl"
+        icon={<span style={{ fontSize: 24, color: "#1d5637" }}>✓</span>}
+        iconBg="rgba(217,240,226,.7)"
+        title="تم الإرسال مسبقاً"
+        body="شكراً! تم استلام نموذجك بنجاح. Thank you! Your form has already been submitted."
+      />
     );
   }
 
-  // 5. First open → mark as opened
+  // First open → mark as opened
   if (link.status === "sent") {
     await adminClient
       .from("form_links")
@@ -92,16 +82,15 @@ export default async function PublicFormPage({ params }: PageProps) {
       .eq("token", token);
   }
 
-  // 6. Lookups
+  // Lookups
   const { data: rawLookups } = await adminClient
     .from("lookups")
     .select("*")
     .eq("is_active", true)
     .order("sort_order");
 
-  // Group lookups by kind
   const lookups: Record<string, { value: string; value_ar: string | null }[]> = {};
-  for (const row of rawLookups ?? []) {
+  for (const row of (rawLookups ?? []) as Lookup[]) {
     if (!lookups[row.kind]) lookups[row.kind] = [];
     lookups[row.kind].push({ value: row.value, value_ar: row.value_ar });
   }

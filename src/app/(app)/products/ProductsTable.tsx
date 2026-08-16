@@ -364,22 +364,17 @@ export default function ProductsTable({ tabCounts, rejectReasons }: Props) {
       )}
 
       {/* Bulk reject modal */}
-      <Modal open={bulkReject} onClose={() => setBulkReject(false)} title={`Reject ${selected.size} products`} danger>
-        <div style={{ marginBottom: 12 }}>
-          <label className="field-label">Reject reason</label>
-          <select className="field" value={bulkReason} onChange={(e) => setBulkReason(e.target.value)}>
-            <option value="">Select reason…</option>
-            {rejectReasons.map((r) => (
-              <option key={r.id} value={r.value}>{r.value_ar ?? r.value}</option>
-            ))}
-          </select>
-        </div>
-        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-          <button className="pill outline" onClick={() => setBulkReject(false)}>Cancel</button>
-          <button className="pill danger" onClick={handleBulkReject} disabled={working}>
-            {working ? "Working…" : `Reject ${selected.size}`}
-          </button>
-        </div>
+      <Modal open={bulkReject} onClose={() => setBulkReject(false)} title={`Reject ${selected.size} products`} danger footer={<>
+        <button className="pill outline" onClick={() => setBulkReject(false)}>Cancel</button>
+        <button className="pill danger" onClick={handleBulkReject} disabled={working}>
+          {working ? "Working…" : `Reject ${selected.size}`}
+        </button>
+      </>}>
+        <label className="field-label">Reject reason</label>
+        <select className="field" value={bulkReason} onChange={(e) => setBulkReason(e.target.value)}>
+          <option value="">Select reason…</option>
+          {rejectReasons.map((r) => <option key={r.id} value={r.value}>{r.value_ar ?? r.value}</option>)}
+        </select>
       </Modal>
 
       {/* Product drawer */}

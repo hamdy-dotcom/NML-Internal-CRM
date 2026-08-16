@@ -153,7 +153,12 @@ export default function TasksTab({ merchant, tasks, currentUserId }: Props) {
       )}
 
       {/* New task modal */}
-      <Modal open={newOpen} onClose={() => setNewOpen(false)} title="New task">
+      <Modal open={newOpen} onClose={() => setNewOpen(false)} title="New task" footer={<>
+        <button className="pill outline" onClick={() => setNewOpen(false)}>Cancel</button>
+        <button className="pill dark" disabled={!title.trim() || pending} onClick={submit}>
+          {pending ? 'Creating…' : 'Create task'}
+        </button>
+      </>}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div>
             <label className="field-label">Title</label>
@@ -180,12 +185,6 @@ export default function TasksTab({ merchant, tasks, currentUserId }: Props) {
                 <option value="low">Low</option>
               </select>
             </div>
-          </div>
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
-            <button className="pill outline" onClick={() => setNewOpen(false)}>Cancel</button>
-            <button className="pill dark" disabled={!title.trim() || pending} onClick={submit}>
-              {pending ? 'Creating…' : 'Create task'}
-            </button>
           </div>
         </div>
       </Modal>

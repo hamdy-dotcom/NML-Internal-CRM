@@ -986,15 +986,10 @@ select 'NML Partnership Agreement', 'nml-partnership',
          {"key":"store_name","label":"اسم المتجر","label_en":"Store name","type":"text","required":true,"prefill":true},
          {"key":"owner_name","label":"اسم المسؤول","label_en":"Contact person","type":"text","required":true,"prefill":true},
          {"key":"phone","label":"رقم الجوال","label_en":"Mobile number","type":"tel","required":true,"prefill":true},
-         {"key":"email","label":"البريد الإلكتروني","label_en":"Email","type":"email","required":false},
-         {"key":"cr_number","label":"رقم السجل التجاري","label_en":"CR number","type":"text","required":true},
-         {"key":"vat_number","label":"الرقم الضريبي","label_en":"VAT number","type":"text","required":false},
-         {"key":"iban","label":"رقم الآيبان","label_en":"IBAN","type":"text","required":true},
-         {"key":"city","label":"المدينة","label_en":"City","type":"select","required":true,"options_from":"city"},
-         {"key":"pickup_address","label":"عنوان الاستلام","label_en":"Pickup address","type":"textarea","required":true},
-         {"key":"cr_file","label":"صورة السجل التجاري","label_en":"CR document","type":"file","required":false},
-         {"key":"consent","label":"أوافق على شروط الشراكة مع نمل وعرض منتجاتي في فروعها","label_en":"I agree to the NML partnership terms","type":"checkbox","required":true},
-         {"key":"signature_name","label":"الاسم الكامل للتوقيع","label_en":"Full name as signature","type":"text","required":true}
+         {"key":"email","label":"البريد الإلكتروني","label_en":"Email","type":"email","required":false,"prefill":true},
+         {"key":"products_ready_count","label":"عدد المنتجات الجاهزة","label_en":"Products ready count","type":"number","required":true},
+         {"key":"notes","label":"ملاحظات أو استفسارات","label_en":"Notes or questions","type":"textarea","required":false},
+         {"key":"consent","label":"أوافق على الشراكة مع نمل عبر منصة سلة","label_en":"I agree with the partnership with NML through Salla Platform","type":"checkbox","required":true}
        ]'::jsonb
 where not exists (select 1 from public.form_templates where slug = 'nml-partnership');
 

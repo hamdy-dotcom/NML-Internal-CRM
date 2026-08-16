@@ -339,25 +339,22 @@ export default function ProductDrawer({
       </Drawer>
 
       {/* Reject modal */}
-      <Modal open={rejectOpen} onClose={() => setRejectOpen(false)} title="Reject product" danger>
+      <Modal open={rejectOpen} onClose={() => setRejectOpen(false)} title="Reject product" danger footer={<>
+        <button className="pill outline" onClick={() => setRejectOpen(false)}>Cancel</button>
+        <button className="pill danger" onClick={handleReject} disabled={working}>
+          {working ? "Working…" : "Reject"}
+        </button>
+      </>}>
         <div style={{ marginBottom: 12 }}>
           <label className="field-label">Reason</label>
           <select className="field" value={rejectReason} onChange={(e) => setRejectReason(e.target.value)}>
             <option value="">Select reason…</option>
-            {rejectReasons.map((r) => (
-              <option key={r.id} value={r.value}>{r.value_ar ?? r.value}</option>
-            ))}
+            {rejectReasons.map((r) => <option key={r.id} value={r.value}>{r.value_ar ?? r.value}</option>)}
           </select>
         </div>
-        <div style={{ marginBottom: 16 }}>
+        <div>
           <label className="field-label">Notes (optional)</label>
           <textarea className="field" rows={3} value={rejectNotes} onChange={(e) => setRejectNotes(e.target.value)} placeholder="Add notes…" />
-        </div>
-        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-          <button className="pill outline" onClick={() => setRejectOpen(false)}>Cancel</button>
-          <button className="pill danger" onClick={handleReject} disabled={working}>
-            {working ? "Working…" : "Reject"}
-          </button>
         </div>
       </Modal>
     </>

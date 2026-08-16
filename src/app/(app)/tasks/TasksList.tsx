@@ -354,7 +354,12 @@ export default function TasksList({ currentUserId, isManager }: Props) {
       </div>
 
       {/* New task modal */}
-      <Modal open={newTaskOpen} onClose={() => { setNewTaskOpen(false); setForm(DEFAULT_TASK); setMerchantResults([]); }} title="New task" wide>
+      <Modal open={newTaskOpen} onClose={() => { setNewTaskOpen(false); setForm(DEFAULT_TASK); setMerchantResults([]); }} title="New task" wide footer={<>
+        <button className="pill outline" onClick={() => { setNewTaskOpen(false); setForm(DEFAULT_TASK); setMerchantResults([]); }}>Cancel</button>
+        <button className="pill dark" onClick={handleSubmit} disabled={submitting}>
+          {submitting ? "Creating…" : "Create task"}
+        </button>
+      </>}>
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <div>
             <label className="field-label">Title *</label>
@@ -417,12 +422,6 @@ export default function TasksList({ currentUserId, isManager }: Props) {
                 ))}
               </div>
             )}
-          </div>
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 }}>
-            <button className="pill outline" onClick={() => { setNewTaskOpen(false); setForm(DEFAULT_TASK); setMerchantResults([]); }}>Cancel</button>
-            <button className="pill dark" onClick={handleSubmit} disabled={submitting}>
-              {submitting ? "Creating…" : "Create task"}
-            </button>
           </div>
         </div>
       </Modal>

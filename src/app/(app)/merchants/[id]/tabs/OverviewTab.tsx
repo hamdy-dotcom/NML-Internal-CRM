@@ -174,12 +174,6 @@ export default function OverviewTab({ merchant, tasks }: Props) {
 
         <div style={{ borderTop: '1px solid var(--g-line)', margin: '10px 0' }} />
 
-        <MaskedField label="CR number" value={merchant.cr_number} />
-        <MaskedField label="VAT number" value={merchant.vat_number} />
-        <MaskedField label="IBAN" value={merchant.iban} />
-
-        <div style={{ borderTop: '1px solid var(--g-line)', margin: '10px 0' }} />
-
         {/* Source & batch */}
         <div className="kv">
           <span className="k">Source</span>
