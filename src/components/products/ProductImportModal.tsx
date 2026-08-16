@@ -35,7 +35,7 @@ function downloadTemplate() {
     TEMPLATE_HEADERS.map(csvEscape).join(","),
     ...TEMPLATE_ROWS.map(r => r.map(csvEscape).join(",")),
   ];
-  triggerCsvDownload("nml-products-template.csv", lines.join("\r\n"));
+  triggerCsvDownload("nml-po-template.csv", lines.join("\r\n"));
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -260,7 +260,7 @@ export default function ProductImportModal({ open, onClose, merchantId, merchant
   // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
-    <Modal open={open} onClose={handleClose} title="Upload products" wide>
+    <Modal open={open} onClose={handleClose} title="Upload PO" wide>
       <Stepper current={step} />
 
       {/* ── Step 0: Upload ──────────────────────────────────────────────────── */}

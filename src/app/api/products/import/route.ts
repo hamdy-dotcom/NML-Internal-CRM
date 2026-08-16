@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
               stock:     p.stock,
               review_notes: p.notes || null,
               raw: p.barcode ? { barcode: p.barcode } : null,
-              source: "merchant_file",
+              source: "po",
               status: productStatus,
             });
           }

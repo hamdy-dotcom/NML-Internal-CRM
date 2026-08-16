@@ -139,7 +139,7 @@ body {
 
 /* Drawers and modals also get backdrop-filter */
 .glass-drawer {
-  background: rgba(255,255,255,.5);
+  background: rgba(247,249,252,.97);
   backdrop-filter: var(--blur);
   -webkit-backdrop-filter: var(--blur);
   border: 1px solid rgba(255,255,255,.7);

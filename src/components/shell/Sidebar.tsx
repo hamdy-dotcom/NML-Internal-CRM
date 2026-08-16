@@ -18,7 +18,6 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/pipeline",    label: "Pipeline",     icon: "≡", roles: ["admin","acq_manager","acq_specialist"] },
   { href: "/onboarding",  label: "Onboarding",   icon: "✓", roles: ["admin","acq_manager","account_manager"] },
   { href: "/products",    label: "Products",     icon: "📦", roles: ["admin","acq_manager","account_manager","catalog_ops"] },
-  { href: "/prospecting", label: "Prospecting",  icon: "🔍", roles: ["admin","acq_manager","acq_specialist"] },
   { href: "/tasks",       label: "Tasks",        icon: "☑" },
   { href: "/reports",     label: "Reports",      icon: "📊", roles: ["admin","acq_manager"] },
   { href: "/settings",    label: "Settings",     icon: "⚙", roles: ["admin"] },

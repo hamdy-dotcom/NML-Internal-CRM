@@ -205,7 +205,7 @@ export default function OnboardingList({ currentUserId }: Props) {
           .in("merchant_id", merchantIds).order("order_index", { ascending: true }),
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (supabase.from("products") as any)
-          .select("merchant_id").in("merchant_id", merchantIds).eq("source", "merchant_file"),
+          .select("merchant_id").in("merchant_id", merchantIds).eq("source", "po"),
       ]);
 
       const rawStepRows = (stepsRes.data ?? []) as Array<{
@@ -278,7 +278,7 @@ export default function OnboardingList({ currentUserId }: Props) {
         .select("id, merchant_id, title, status, due_at, order_index, is_required, completed_at, completed_by")
         .eq("merchant_id", merchantId).order("order_index", { ascending: true }),
       (supabase.from("products") as any)
-        .select("merchant_id").eq("merchant_id", merchantId).eq("source", "merchant_file"),
+        .select("merchant_id").eq("merchant_id", merchantId).eq("source", "po"),
     ]);
 
     const m = mRes.data as {
@@ -495,7 +495,7 @@ export default function OnboardingList({ currentUserId }: Props) {
               <th style={THEAD_BG}>Account manager</th>
               <th style={{ textAlign: "center", ...THEAD_BG }}>Days since CTA</th>
               <th style={THEAD_BG}>Welcome call</th>
-              <th style={THEAD_BG}>Stocks &amp; prices</th>
+              <th style={THEAD_BG}>First PO Agreement</th>
               <th style={THEAD_BG}></th>
             </tr>
           </thead>
@@ -606,7 +606,7 @@ export default function OnboardingList({ currentUserId }: Props) {
                   {/* Stocks & prices */}
                   <td>
                     <StepCell
-                      label="Stocks & prices"
+                      label="First PO Agreement"
                       step={step2}
                       blocked={blocked}
                       toggling={togglingStep === step2?.id}

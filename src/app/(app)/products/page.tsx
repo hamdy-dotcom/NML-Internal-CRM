@@ -1,43 +1,41 @@
 import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
 import ProductsTable from "./ProductsTable";
+import FetchPanel from "./FetchPanel";
+
+const ONBOARDING_STAGES = ["cta_completed", "onboarding"];
 
 export default async function ProductsPage() {
   const supabase = await createClient();
 
   const [
-    { count: readyCount },
-    { count: reviewCount },
-    { count: shelvedCount },
-    { count: rejectedCount },
+    { count: activeCount },
+    { count: onboardingCount },
     { count: allCount },
-    { data: rejectReasons },
   ] = await Promise.all([
-    supabase.from("products").select("*", { count: "exact", head: true }).eq("status", "ready_for_shelf"),
-    supabase.from("products").select("*", { count: "exact", head: true }).eq("status", "in_review"),
-    supabase.from("products").select("*", { count: "exact", head: true }).eq("status", "shelved"),
-    supabase.from("products").select("*", { count: "exact", head: true }).eq("status", "rejected"),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase.from("products") as any)
+      .select("id, merchants!inner(stage)", { count: "exact", head: true })
+      .eq("merchants.stage", "active"),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase.from("products") as any)
+      .select("id, merchants!inner(stage)", { count: "exact", head: true })
+      .in("merchants.stage", ONBOARDING_STAGES),
     supabase.from("products").select("*", { count: "exact", head: true }),
-    supabase
-      .from("lookups")
-      .select("*")
-      .eq("kind", "reject_reason")
-      .eq("is_active", true)
-      .order("sort_order"),
   ]);
 
   return (
-    <Suspense fallback={<div style={{ padding: "20px 0", color: "var(--ink-3)" }}>Loading…</div>}>
-      <ProductsTable
-        tabCounts={{
-          ready_for_shelf: readyCount ?? 0,
-          in_review: reviewCount ?? 0,
-          shelved: shelvedCount ?? 0,
-          rejected: rejectedCount ?? 0,
-          all: allCount ?? 0,
-        }}
-        rejectReasons={rejectReasons ?? []}
-      />
-    </Suspense>
+    <div style={{ paddingTop: 16 }}>
+      <FetchPanel />
+      <Suspense fallback={<div style={{ color: "var(--ink-3)" }}>Loading…</div>}>
+        <ProductsTable
+          tabCounts={{
+            active:     activeCount     ?? 0,
+            onboarding: onboardingCount ?? 0,
+            all:        allCount        ?? 0,
+          }}
+        />
+      </Suspense>
+    </div>
   );
 }

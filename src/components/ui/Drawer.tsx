@@ -1,16 +1,20 @@
 "use client";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 interface Props {
-  open: boolean;
-  onClose: () => void;
-  title: string;
+  open:     boolean;
+  onClose:  () => void;
+  title:    string;
   children: React.ReactNode;
-  side?: "right" | "left";
-  width?: number;
+  side?:    "right" | "left";
+  width?:   number;
 }
 
 export default function Drawer({ open, onClose, title, children, side = "right", width = 480 }: Props) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -18,12 +22,22 @@ export default function Drawer({ open, onClose, title, children, side = "right",
     return () => document.removeEventListener("keydown", handler);
   }, [open, onClose]);
 
-  if (!open) return null;
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, [open]);
 
-  return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 100, display: "flex" }}>
+  if (!open || !mounted) return null;
+
+  return createPortal(
+    <div style={{ position: "fixed", inset: 0, zIndex: 200, display: "flex" }}>
       {/* Backdrop */}
-      <div style={{ flex: 1, background: "rgba(28,37,54,.25)", backdropFilter: "blur(2px)" }} onClick={onClose} />
+      <div
+        style={{ flex: 1, background: "rgba(28,37,54,.25)", backdropFilter: "blur(2px)" }}
+        onClick={onClose}
+      />
       {/* Panel */}
       <div
         className="glass-drawer"
@@ -46,6 +60,7 @@ export default function Drawer({ open, onClose, title, children, side = "right",
           {children}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
