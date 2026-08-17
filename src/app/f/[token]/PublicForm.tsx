@@ -161,7 +161,7 @@ export default function PublicForm({ token, merchant }: PublicFormProps) {
 
   // New fields
   const [productsCount, setProductsCount] = useState("");
-  const [targetMarket, setTargetMarket]   = useState("");
+  const [targetMarkets, setTargetMarkets] = useState<string[]>([]);
   const [notes, setNotes]                 = useState("");
   const [consent, setConsent]             = useState(false);
 
@@ -193,8 +193,8 @@ export default function PublicForm({ token, merchant }: PublicFormProps) {
     if (!phone.trim())     e.phone = req;
     if (!productsCount.trim() || isNaN(Number(productsCount)) || Number(productsCount) < 0)
       e.products_ready_count = isAr ? "يرجى إدخال عدداً صحيحاً" : "Please enter a valid number";
-    if (!targetMarket)
-      e.target_market = isAr ? "يرجى اختيار وجهة المنتجات" : "Please select a destination";
+    if (targetMarkets.length === 0)
+      e.target_market = isAr ? "يرجى اختيار وجهة واحدة على الأقل" : "Please select at least one destination";
     if (!consent)
       e.consent = isAr ? "يجب الموافقة للمتابعة" : "You must agree to continue";
     return e;
@@ -223,7 +223,7 @@ export default function PublicForm({ token, merchant }: PublicFormProps) {
             phone: phone.trim(),
             email: email.trim() || null,
             products_ready_count: Number(productsCount),
-            target_market: targetMarket,
+            target_market: targetMarkets,
             notes: notes.trim() || null,
             consent: true,
           },
@@ -438,26 +438,60 @@ export default function PublicForm({ token, merchant }: PublicFormProps) {
           {inlineErr("products_ready_count")}
         </div>
 
-        {/* ── Destination market ── */}
-        <div style={{ marginBottom: 10 }}>
+        {/* ── Destination market (multi-select chips) ── */}
+        <div id="field-target_market" style={{ marginBottom: 10 }}>
           {lbl(
             isAr ? "أين تريد إضافة منتجاتك؟" : "Where do you want your products added?",
             true,
           )}
-          <select
-            id="field-target_market"
-            value={targetMarket}
-            onChange={e => { setTargetMarket(e.target.value); clearErr("target_market"); }}
-            style={errors.target_market ? { ...fieldErrStyle, appearance: "none" as const } : { ...fieldBase, appearance: "none" as const }}
-          >
-            <option value="">{isAr ? "اختر وجهة…" : "Select destination…"}</option>
-            <option value="بنده">بنده</option>
-            <option value="العثيم">العثيم</option>
-            <option value="الدكان">الدكان</option>
-            <option value="الدانوب">الدانوب</option>
-            <option value="نينجا">نينجا</option>
-            <option value="هلا ماركت">هلا ماركت</option>
-          </select>
+          <div style={{
+            fontSize: 11.5, color: INK_3, marginBottom: 8,
+          }}>
+            {isAr ? "يمكنك اختيار أكثر من وجهة" : "You can select more than one"}
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {["بنده", "العثيم", "الدكان", "الدانوب", "نينجا", "هلا ماركت"].map(opt => {
+              const selected = targetMarkets.includes(opt);
+              return (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => {
+                    setTargetMarkets(prev =>
+                      prev.includes(opt) ? prev.filter(x => x !== opt) : [...prev, opt]
+                    );
+                    clearErr("target_market");
+                  }}
+                  style={{
+                    padding: "9px 16px",
+                    borderRadius: 999,
+                    border: selected
+                      ? "1.5px solid rgba(31,45,78,.55)"
+                      : errors.target_market
+                        ? "1.5px solid rgba(163,48,47,.35)"
+                        : "1.5px solid rgba(180,190,210,.5)",
+                    background: selected
+                      ? INK
+                      : "rgba(255,255,255,.75)",
+                    color: selected ? "#fff" : INK,
+                    fontSize: 13,
+                    fontFamily: FONT,
+                    fontWeight: selected ? 500 : 400,
+                    cursor: "pointer",
+                    transition: "all .15s ease",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                  }}
+                >
+                  {selected && (
+                    <span style={{ fontSize: 11, opacity: .85 }}>✓</span>
+                  )}
+                  {opt}
+                </button>
+              );
+            })}
+          </div>
           {inlineErr("target_market")}
         </div>
 

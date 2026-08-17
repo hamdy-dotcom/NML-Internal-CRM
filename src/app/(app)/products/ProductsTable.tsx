@@ -101,19 +101,32 @@ export default function ProductsTable({ tabCounts }: Props) {
   const searchParams = useSearchParams();
   const productId    = searchParams.get("productId");
 
-  const [tab,         setTab]         = useState<Tab>("active");
-  const [viewMode,    setViewMode]    = useState<"table" | "grid">("table");
-  const [filters,     setFilters]     = useState<Filters>(DEFAULT_FILTERS);
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const [products,    setProducts]    = useState<ProductRow[]>([]);
-  const [loading,     setLoading]     = useState(true);
-  const [selected,    setSelected]    = useState<Set<string>>(new Set());
-  const [working,     setWorking]     = useState(false);
+  const [tab,              setTab]              = useState<Tab>("active");
+  const [viewMode,         setViewMode]         = useState<"table" | "grid">("table");
+  const [filters,          setFilters]          = useState<Filters>(DEFAULT_FILTERS);
+  const [filtersOpen,      setFiltersOpen]      = useState(false);
+  const [products,         setProducts]         = useState<ProductRow[]>([]);
+  const [loading,          setLoading]          = useState(true);
+  const [selected,         setSelected]         = useState<Set<string>>(new Set());
+  const [working,          setWorking]          = useState(false);
+  const [merchantOptions,  setMerchantOptions]  = useState<string[]>([]);
+  const [merchantDropdown, setMerchantDropdown] = useState(false);
 
   // Persist view mode
   useEffect(() => {
     const saved = localStorage.getItem("products-view");
     if (saved === "grid" || saved === "table") setViewMode(saved);
+  }, []);
+
+  // Load merchant names for the searchable dropdown
+  useEffect(() => {
+    supabase.from("merchants").select("store_name").order("store_name").then(({ data }) => {
+      if (data) {
+        const unique = [...new Set(data.map(m => m.store_name).filter(Boolean) as string[])];
+        setMerchantOptions(unique);
+      }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const setView = (v: "table" | "grid") => {
     setViewMode(v); localStorage.setItem("products-view", v);
@@ -234,8 +247,42 @@ export default function ProductsTable({ tabCounts }: Props) {
       {/* Filters panel */}
       {filtersOpen && (
         <div className="glass-panel" style={{ padding: "14px 16px", marginBottom: 12, display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))", gap: 10 }}>
+          {/* Merchant combobox */}
+          <div style={{ position: "relative" }}>
+            <label className="field-label">Merchant</label>
+            <input
+              className="field"
+              type="text"
+              placeholder="Search merchant…"
+              value={filters.merchant}
+              onChange={e => { setFilters(f => ({ ...f, merchant: e.target.value })); setMerchantDropdown(true); }}
+              onFocus={() => setMerchantDropdown(true)}
+              onBlur={() => setTimeout(() => setMerchantDropdown(false), 150)}
+            />
+            {merchantDropdown && merchantOptions.filter(n => !filters.merchant || n.toLowerCase().includes(filters.merchant.toLowerCase())).length > 0 && (
+              <div style={{
+                position: "absolute", top: "100%", left: 0, right: 0, zIndex: 50,
+                background: "rgba(255,255,255,.97)", border: "1px solid var(--g-line)",
+                borderRadius: 10, boxShadow: "0 8px 24px rgba(40,60,110,.12)",
+                maxHeight: 200, overflowY: "auto",
+              }}>
+                {merchantOptions
+                  .filter(n => !filters.merchant || n.toLowerCase().includes(filters.merchant.toLowerCase()))
+                  .slice(0, 20)
+                  .map(name => (
+                    <div
+                      key={name}
+                      style={{ padding: "8px 12px", cursor: "pointer", fontSize: 12.5 }}
+                      onMouseDown={() => { setFilters(f => ({ ...f, merchant: name })); setMerchantDropdown(false); }}
+                    >
+                      {name}
+                    </div>
+                  ))}
+              </div>
+            )}
+          </div>
+
           {[
-            { key: "merchant" as const, label: "Merchant",  type: "text",   placeholder: "Search merchant…" },
             { key: "category" as const, label: "Category",  type: "text",   placeholder: "Category…" },
             { key: "brand"    as const, label: "Brand",     type: "text",   placeholder: "Brand…" },
             { key: "priceMin" as const, label: "Price min", type: "number", placeholder: "0" },
