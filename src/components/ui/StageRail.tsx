@@ -53,7 +53,7 @@ export default function StageRail({ merchant, onStageClick }: StageRailProps) {
           const isTodo = i > effectiveIdx;
           const days = daysInStage(merchant, i);
           const date = merchant[s.tsKey] as string | null;
-          const clickable = isTodo && !!onStageClick;
+          const clickable = !isCurrent && !!onStageClick;
 
           return (
             <div

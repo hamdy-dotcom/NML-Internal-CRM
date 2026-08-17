@@ -86,6 +86,9 @@ export default function MerchantDetailClient({
   const [newStage, setNewStage] = useState<MerchantStage>(merchant.stage);
   const [stageReason, setStageReason] = useState('');
 
+  // Products side panel
+  const [productsOpen, setProductsOpen] = useState(false);
+
   // Audit log panel
   const [auditOpen, setAuditOpen] = useState(false);
 
@@ -190,6 +193,9 @@ export default function MerchantDetailClient({
             </button>
             <button className="pill dark" style={{ fontSize: 12.5 }} onClick={() => setTab('activity')}>
               Log activity
+            </button>
+            <button className="pill outline" style={{ fontSize: 12.5 }} onClick={() => setProductsOpen(true)}>
+              📦 Products ({products.length})
             </button>
             {/* Overflow */}
             <div style={{ position: 'relative' }}>
@@ -327,6 +333,88 @@ export default function MerchantDetailClient({
           </div>
         </div>
       </div>
+
+      {/* Products side panel */}
+      {productsOpen && (
+        <div
+          style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', justifyContent: 'flex-end' }}
+          onClick={() => setProductsOpen(false)}
+        >
+          <div
+            style={{
+              width: 560, maxWidth: '90vw', height: '100%',
+              background: 'rgba(255,255,255,.92)',
+              backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)',
+              borderInlineStart: '1px solid var(--g-line)',
+              boxShadow: '-8px 0 40px rgba(40,60,110,.14)',
+              display: 'flex', flexDirection: 'column',
+              overflowY: 'auto',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Panel header */}
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--g-line)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 500, color: 'var(--ink)' }}>Products</div>
+                <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 2 }}>{merchant.store_name} · {products.length} products</div>
+              </div>
+              <button
+                onClick={() => setProductsOpen(false)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--ink-3)', padding: '4px 8px' }}
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Product list */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '12px 20px' }}>
+              {products.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--ink-4)', fontSize: 13 }}>
+                  No products yet
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {products.map(p => (
+                    <div
+                      key={p.id}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 12,
+                        padding: '10px 12px', borderRadius: 12,
+                        background: 'rgba(255,255,255,.8)',
+                        border: '1px solid var(--g-line)',
+                      }}
+                    >
+                      {p.image_url ? (
+                        <img src={p.image_url} alt="" width={44} height={44} style={{ borderRadius: 8, objectFit: 'cover', flexShrink: 0 }} />
+                      ) : (
+                        <div style={{ width: 44, height: 44, borderRadius: 8, background: 'var(--g-panel)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>📦</div>
+                      )}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
+                        <div style={{ fontSize: 11.5, color: 'var(--ink-3)', marginTop: 1 }}>
+                          {p.sku ? `SKU: ${p.sku}` : ''}
+                          {p.sku && p.category ? ' · ' : ''}
+                          {p.category || ''}
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'end', flexShrink: 0 }}>
+                        {p.price != null && (
+                          <div style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--ink)', fontFamily: 'JetBrains Mono, monospace' }}>
+                            SAR {Number(p.price).toLocaleString()}
+                          </div>
+                        )}
+                        <span style={{ fontSize: 11, padding: '2px 7px', borderRadius: 99, background: 'var(--blue-bg)', color: 'var(--blue)', fontWeight: 500 }}>
+                          {p.status}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Modals ─────────────────────────────────────────────────────── */}
 

@@ -18,8 +18,6 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/pipeline",    label: "Pipeline",     icon: "≡", roles: ["admin","acq_manager","acq_specialist"] },
   { href: "/onboarding",  label: "Onboarding",   icon: "✓", roles: ["admin","acq_manager","account_manager"] },
   { href: "/products",    label: "Products",     icon: "📦", roles: ["admin","acq_manager","account_manager","catalog_ops"] },
-  { href: "/tasks",       label: "Tasks",        icon: "☑" },
-  { href: "/reports",     label: "Reports",      icon: "📊", roles: ["admin","acq_manager"] },
   { href: "/settings",    label: "Settings",     icon: "⚙", roles: ["admin"] },
 ];
 
@@ -28,18 +26,16 @@ interface Props {
   collapsed?: boolean;
   onToggle?: () => void;
   leadCount?: number;
-  taskCount?: number;
   productCount?: number;
 }
 
-export default function Sidebar({ role, collapsed = false, onToggle, leadCount, taskCount, productCount }: Props) {
+export default function Sidebar({ role, collapsed = false, onToggle, leadCount, productCount }: Props) {
   const pathname = usePathname();
 
   const visible = NAV_ITEMS.filter(item => !item.roles || item.roles.includes(role));
 
   const badges: Record<string, number | undefined> = {
     "/leads":    leadCount,
-    "/tasks":    taskCount,
     "/products": productCount,
   };
 

@@ -15,9 +15,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if ((profile as Record<string, unknown>).must_change_password) redirect("/auth/update-password");
 
   // Badge counts
-  const [{ count: leadCount }, { count: taskCount }, { count: productCount }] = await Promise.all([
+  const [{ count: leadCount }, { count: productCount }] = await Promise.all([
     supabase.from("merchants").select("*", { count: "exact", head: true }).eq("stage", "new"),
-    supabase.from("tasks").select("*", { count: "exact", head: true }).eq("assignee_id", user.id).eq("status", "open").lt("due_at", new Date().toISOString()),
     supabase.from("products").select("*", { count: "exact", head: true }).eq("status", "ready_for_shelf"),
   ]);
 
@@ -34,7 +33,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <Sidebar
           role={profile.role}
           leadCount={leadCount ?? 0}
-          taskCount={taskCount ?? 0}
           productCount={productCount ?? 0}
         />
 

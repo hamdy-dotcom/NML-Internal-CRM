@@ -72,17 +72,17 @@ const fieldErrStyle: React.CSSProperties = {
   border: "1px solid rgba(163,48,47,.3)",
 };
 
-// ── .mark (NML logo badge) ────────────────────────────────────────────────────
+// ── .mark (Salla logo badge) ─────────────────────────────────────────────────
 function Mark() {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
       <div style={{
         width: 28, height: 28, borderRadius: 9,
-        background: NML_RED, color: "#fff",
+        background: "#5c6bc0", color: "#fff",
         display: "flex", alignItems: "center", justifyContent: "center",
         fontSize: 12, fontWeight: 500,
-      }}>N</div>
-      <span style={{ fontSize: 14, fontWeight: 500, color: INK }}>نمل</span>
+      }}>S</div>
+      <span style={{ fontSize: 14, fontWeight: 500, color: INK }}>سلة</span>
     </div>
   );
 }
@@ -161,6 +161,7 @@ export default function PublicForm({ token, merchant }: PublicFormProps) {
 
   // New fields
   const [productsCount, setProductsCount] = useState("");
+  const [targetMarket, setTargetMarket]   = useState("");
   const [notes, setNotes]                 = useState("");
   const [consent, setConsent]             = useState(false);
 
@@ -192,6 +193,8 @@ export default function PublicForm({ token, merchant }: PublicFormProps) {
     if (!phone.trim())     e.phone = req;
     if (!productsCount.trim() || isNaN(Number(productsCount)) || Number(productsCount) < 0)
       e.products_ready_count = isAr ? "يرجى إدخال عدداً صحيحاً" : "Please enter a valid number";
+    if (!targetMarket)
+      e.target_market = isAr ? "يرجى اختيار وجهة المنتجات" : "Please select a destination";
     if (!consent)
       e.consent = isAr ? "يجب الموافقة للمتابعة" : "You must agree to continue";
     return e;
@@ -220,6 +223,7 @@ export default function PublicForm({ token, merchant }: PublicFormProps) {
             phone: phone.trim(),
             email: email.trim() || null,
             products_ready_count: Number(productsCount),
+            target_market: targetMarket,
             notes: notes.trim() || null,
             consent: true,
           },
@@ -283,8 +287,8 @@ export default function PublicForm({ token, merchant }: PublicFormProps) {
           </div>
           <div style={{ fontSize: 13, color: INK_2, lineHeight: 1.7, marginBottom: 15 }}>
             {isAr
-              ? "أصبح متجرك ضمن شركاء نمل. هذه الخطوات القادمة:"
-              : "Your store is now a NML partner. Here are the next steps:"}
+              ? "تم استلام بياناتك. هذه الخطوات القادمة:"
+              : "Your details have been received. Here are the next steps:"}
           </div>
           {[
             {
@@ -333,7 +337,7 @@ export default function PublicForm({ token, merchant }: PublicFormProps) {
       <form onSubmit={handleSubmit} noValidate style={{ ...phoneCard, zIndex: 1 }}>
         {/* Title */}
         <div style={{ fontSize: 16, fontWeight: 500, color: INK, marginBottom: 6 }}>
-          {isAr ? "تأكيد الشراكة مع نمل" : "NML Partnership Confirmation"}
+          {isAr ? "تفاصيل متجرك" : "Store Details"}
         </div>
         <div style={{ fontSize: 13, color: INK_2, lineHeight: 1.7, marginBottom: 15 }}>
           {isAr
@@ -418,7 +422,7 @@ export default function PublicForm({ token, merchant }: PublicFormProps) {
         {/* ── Products count ── */}
         <div style={{ marginBottom: 10 }}>
           {lbl(
-            isAr ? "كم عدد المنتجات الجاهزة لنمل؟" : "How many products are ready for NML?",
+            isAr ? "كم عدد المنتجات الجاهزة؟" : "How many products are ready?",
             true,
           )}
           <input
@@ -432,6 +436,29 @@ export default function PublicForm({ token, merchant }: PublicFormProps) {
             style={errors.products_ready_count ? fieldErrStyle : fieldBase}
           />
           {inlineErr("products_ready_count")}
+        </div>
+
+        {/* ── Destination market ── */}
+        <div style={{ marginBottom: 10 }}>
+          {lbl(
+            isAr ? "أين تريد إضافة منتجاتك؟" : "Where do you want your products added?",
+            true,
+          )}
+          <select
+            id="field-target_market"
+            value={targetMarket}
+            onChange={e => { setTargetMarket(e.target.value); clearErr("target_market"); }}
+            style={errors.target_market ? { ...fieldErrStyle, appearance: "none" as const } : { ...fieldBase, appearance: "none" as const }}
+          >
+            <option value="">{isAr ? "اختر وجهة…" : "Select destination…"}</option>
+            <option value="بنده">بنده</option>
+            <option value="العثيم">العثيم</option>
+            <option value="الدكان">الدكان</option>
+            <option value="الدانوب">الدانوب</option>
+            <option value="نينجا">نينجا</option>
+            <option value="هلا ماركت">هلا ماركت</option>
+          </select>
+          {inlineErr("target_market")}
         </div>
 
         {/* ── Notes ── */}
@@ -468,13 +495,8 @@ export default function PublicForm({ token, merchant }: PublicFormProps) {
           />
           <span style={{ fontSize: 12, color: INK_2, lineHeight: 1.6 }}>
             {isAr
-              ? "أوافق على الشراكة مع نمل عبر منصة سلة"
-              : "I agree with the partnership with NML through Salla Platform"}
-            <span style={{ display: "block", fontSize: 11, color: INK_4, marginTop: 1 }}>
-              {isAr
-                ? "I agree with the partnership with NML through Salla Platform"
-                : "أوافق على الشراكة مع نمل عبر منصة سلة"}
-            </span>
+              ? "أوافق على المتابعة عبر منصة سلة"
+              : "I agree to proceed through Salla Platform"}
           </span>
         </label>
         {errors.consent && (
@@ -514,7 +536,7 @@ export default function PublicForm({ token, merchant }: PublicFormProps) {
         >
           {submitting
             ? (isAr ? "جاري الإرسال..." : "Submitting…")
-            : (isAr ? "إرسال والانضمام لنمل" : "Submit and join NML")}
+            : (isAr ? "إرسال" : "Submit")}
         </button>
       </form>
     </WallShell>
@@ -559,11 +581,11 @@ export function WallScreen({ dir = "rtl", icon, iconBg, title, body, extra }: Wa
         <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 18 }}>
           <div style={{
             width: 28, height: 28, borderRadius: 9,
-            background: NML_RED, color: "#fff",
+            background: "#5c6bc0", color: "#fff",
             display: "flex", alignItems: "center", justifyContent: "center",
             fontSize: 12, fontWeight: 500,
-          }}>N</div>
-          <span style={{ fontSize: 14, fontWeight: 500, color: INK }}>نمل</span>
+          }}>S</div>
+          <span style={{ fontSize: 14, fontWeight: 500, color: INK }}>سلة</span>
         </div>
         <div style={{
           width: 48, height: 48, borderRadius: 16,
