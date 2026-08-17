@@ -1,5 +1,5 @@
 "use client";
-import { useState, useMemo } from "react";
+import { useState, useMemo, type ReactNode } from "react";
 
 // ── Data ──────────────────────────────────────────────────────────────────────
 
@@ -9,7 +9,7 @@ interface FAQ {
   id: string;
   category: Category;
   q: string;
-  a: string | React.ReactNode;
+  a: string | ReactNode;
 }
 
 const CATEGORIES: { key: Category; label: string; icon: string }[] = [
