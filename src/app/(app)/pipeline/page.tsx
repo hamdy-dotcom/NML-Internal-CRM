@@ -35,6 +35,18 @@ export default async function PipelinePage({ searchParams }: PageProps) {
   const viewMode =
     params.view === "team" && isManager ? "team" : "my";
 
+  // ── Diagnostic: total rows visible in v_merchants_list with no filter ─────
+  const { count: totalVisible, error: diagErr } = await supabase
+    .from("v_merchants_list")
+    .select("*", { count: "exact", head: true });
+
+  console.log(
+    `[pipeline] user=${user!.id} role=${profile?.role ?? "?"} isManager=${isManager} viewMode=${viewMode}`,
+  );
+  console.log(
+    `[pipeline] v_merchants_list total visible (no filter): ${totalVisible ?? "null"} err=${diagErr?.message ?? "none"}`,
+  );
+
   // Fetch merchants for each pipeline column
   const columnData: Record<PipelineStage, VMerchantList[]> = {
     assigned:      [],
@@ -50,6 +62,7 @@ export default async function PipelinePage({ searchParams }: PageProps) {
     form_sent:     0,
     cta_completed: 0,
   };
+  const columnErrors: Partial<Record<PipelineStage, string>> = {};
 
   await Promise.all(
     PIPELINE_STAGES.map(async (stage) => {
@@ -66,7 +79,15 @@ export default async function PipelinePage({ searchParams }: PageProps) {
         q = q.eq("acquisition_owner_id", params.specialist);
       }
 
-      const { data, count } = await q;
+      const { data, count, error } = await q;
+
+      if (error) {
+        console.error(`[pipeline] stage=${stage} error:`, error.message, error.code);
+        columnErrors[stage] = error.message;
+      } else {
+        console.log(`[pipeline] stage=${stage} count=${count ?? "null"} rows=${data?.length ?? 0}`);
+      }
+
       columnData[stage] = (data ?? []) as VMerchantList[];
       columnCounts[stage] = count ?? 0;
     }),
@@ -85,15 +106,47 @@ export default async function PipelinePage({ searchParams }: PageProps) {
         ).data ?? []
       : [];
 
+  const firstError = Object.values(columnErrors)[0];
+
   return (
-    <PipelineBoard
-      columnData={columnData}
-      columnCounts={columnCounts}
-      isManager={isManager}
-      viewMode={viewMode}
-      selectedSpecialist={params.specialist}
-      specialists={specialists as { id: string; full_name: string | null }[]}
-      currentUserId={user!.id}
-    />
+    <>
+      {/* Diagnostic banner — remove once the bug is identified */}
+      {(firstError || totalVisible === 0) && (
+        <div
+          style={{
+            margin: "12px 0",
+            padding: "10px 14px",
+            background: "var(--red-bg, #fff0f0)",
+            border: "1px solid var(--red, #e04040)",
+            borderRadius: 8,
+            fontSize: 12.5,
+            color: "var(--red, #c00)",
+            fontFamily: "JetBrains Mono, monospace",
+          }}
+        >
+          <strong>Pipeline diagnostic</strong>
+          <br />
+          User: {user!.id} · role: {profile?.role ?? "?"} · isManager: {String(isManager)} · viewMode: {viewMode}
+          <br />
+          v_merchants_list total visible (no stage filter): {totalVisible ?? "null"}
+          {diagErr && <> · view error: {diagErr.message}</>}
+          {firstError && (
+            <>
+              <br />
+              Column query error: {firstError}
+            </>
+          )}
+        </div>
+      )}
+      <PipelineBoard
+        columnData={columnData}
+        columnCounts={columnCounts}
+        isManager={isManager}
+        viewMode={viewMode}
+        selectedSpecialist={params.specialist}
+        specialists={specialists as { id: string; full_name: string | null }[]}
+        currentUserId={user!.id}
+      />
+    </>
   );
 }

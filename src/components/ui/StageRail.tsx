@@ -30,7 +30,12 @@ function daysInStage(merchant: Merchant, idx: number): number | null {
   return diff;
 }
 
-export default function StageRail({ merchant }: { merchant: Merchant }) {
+interface StageRailProps {
+  merchant: Merchant;
+  onStageClick?: (stage: MerchantStage) => void;
+}
+
+export default function StageRail({ merchant, onStageClick }: StageRailProps) {
   const currentIdx = STAGE_ORDER_IDX[merchant.stage] ?? -1;
   // For on_hold / lost, show where the merchant was previously
   const effectiveIdx = currentIdx === -1 ? (STAGE_ORDER_IDX[merchant.previous_stage ?? "new"] ?? 0) : currentIdx;
@@ -48,9 +53,16 @@ export default function StageRail({ merchant }: { merchant: Merchant }) {
           const isTodo = i > effectiveIdx;
           const days = daysInStage(merchant, i);
           const date = merchant[s.tsKey] as string | null;
+          const clickable = isTodo && !!onStageClick;
 
           return (
-            <div key={s.key} className={`step ${isDone ? "done" : isCurrent ? "now" : "todo"}`}>
+            <div
+              key={s.key}
+              className={`step ${isDone ? "done" : isCurrent ? "now" : "todo"}`}
+              style={clickable ? { cursor: "pointer" } : undefined}
+              onClick={clickable ? () => onStageClick(s.key) : undefined}
+              title={clickable ? `Change stage to ${s.label}` : undefined}
+            >
               <div className="dot" />
               <div className="step-name">{s.label}</div>
               <div className={`step-date ${isCurrent && days != null && days > 7 ? "late" : ""}`}>

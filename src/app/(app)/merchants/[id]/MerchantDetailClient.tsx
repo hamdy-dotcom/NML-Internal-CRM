@@ -84,9 +84,17 @@ export default function MerchantDetailClient({
   const [lostReason, setLostReason] = useState('');
   const [newOwner, setNewOwner] = useState<string | null>(null);
   const [newStage, setNewStage] = useState<MerchantStage>(merchant.stage);
+  const [stageReason, setStageReason] = useState('');
 
   // Audit log panel
   const [auditOpen, setAuditOpen] = useState(false);
+
+  function openStageModal(stage: MerchantStage) {
+    setNewStage(stage);
+    setStageReason('');
+    setStageOpen(true);
+    setMenuOpen(false);
+  }
 
   function copyCode() {
     navigator.clipboard.writeText(merchant.merchant_code);
@@ -194,7 +202,7 @@ export default function MerchantDetailClient({
                   style={{ position: 'absolute', right: 0, top: 36, zIndex: 30, width: 180, padding: '6px 0', boxShadow: 'var(--shadow)' }}
                 >
                   {[
-                    { label: 'Change stage', action: () => { setNewStage(merchant.stage); setStageOpen(true); setMenuOpen(false); } },
+                    { label: 'Change stage', action: () => openStageModal(merchant.stage) },
                     { label: 'Put on hold', action: () => { setHoldOpen(true); setMenuOpen(false); } },
                     { label: 'Mark lost', action: () => { setLostOpen(true); setMenuOpen(false); } },
                     { label: 'Reassign', action: () => { setReassignOpen(true); setMenuOpen(false); } },
@@ -217,7 +225,7 @@ export default function MerchantDetailClient({
 
         {/* Stage rail */}
         <div style={{ marginTop: 14 }}>
-          <StageRail merchant={merchant} />
+          <StageRail merchant={merchant} onStageClick={openStageModal} />
         </div>
       </div>
 
@@ -327,7 +335,7 @@ export default function MerchantDetailClient({
         <button className="pill outline" onClick={() => setStageOpen(false)}>Cancel</button>
         <button className="pill dark" disabled={pending} onClick={() => {
           startTransition(async () => {
-            const res = await changeStage(merchant.id, newStage);
+            const res = await changeStage(merchant.id, newStage, stageReason.trim() || undefined);
             if (res.error) toast.error(res.error);
             else { toast.success('Stage updated.'); setStageOpen(false); }
           });
@@ -336,9 +344,28 @@ export default function MerchantDetailClient({
         </button>
       </>}>
         <label className="field-label">New stage</label>
-        <select className="field" value={newStage} onChange={e => setNewStage(e.target.value as MerchantStage)}>
+        <select
+          className="field"
+          value={newStage}
+          onChange={e => { setNewStage(e.target.value as MerchantStage); setStageReason(''); }}
+        >
           {STAGES_ORDER.map(s => <option key={s} value={s}>{STAGE_LABELS[s]}</option>)}
         </select>
+        {(newStage === 'on_hold' || newStage === 'lost') && (
+          <>
+            <label className="field-label" style={{ marginTop: 12 }}>
+              Reason{newStage === 'lost' ? ' (required)' : ' (required)'}
+            </label>
+            <textarea
+              className="field"
+              rows={3}
+              value={stageReason}
+              onChange={e => setStageReason(e.target.value)}
+              placeholder={newStage === 'lost' ? 'Why was this merchant lost?' : 'Why is this merchant on hold?'}
+              autoFocus
+            />
+          </>
+        )}
       </Modal>
 
       {/* Put on hold */}
