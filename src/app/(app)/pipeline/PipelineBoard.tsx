@@ -705,6 +705,7 @@ export default function PipelineBoard({
   function toggleView(mode: "my" | "team") {
     const sp = new URLSearchParams();
     if (mode === "team") sp.set("view", "team");
+    else if (isManager) sp.set("view", "my"); // managers need explicit param; specialists have no toggle
     router.push(`/pipeline?${sp.toString()}`);
   }
 

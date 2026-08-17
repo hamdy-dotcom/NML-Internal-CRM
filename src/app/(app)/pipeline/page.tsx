@@ -32,8 +32,9 @@ export default async function PipelinePage({ searchParams }: PageProps) {
 
   const managerRoles = ["admin", "acq_manager"];
   const isManager = managerRoles.includes(profile?.role ?? "");
+  // Managers default to team view; specialists always see their own pipeline
   const viewMode =
-    params.view === "team" && isManager ? "team" : "my";
+    isManager && params.view !== "my" ? "team" : "my";
 
   // ── Diagnostic: total rows visible in v_merchants_list with no filter ─────
   const { count: totalVisible, error: diagErr } = await supabase
