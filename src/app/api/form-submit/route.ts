@@ -36,7 +36,13 @@ export async function POST(req: NextRequest) {
   // ── Rate limit ─────────────────────────────────────────────────────────
   const ip =
     req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "127.0.0.1";
-  const body = (await req.json()) as SubmitBody;
+
+  let body: SubmitBody;
+  try {
+    body = (await req.json()) as SubmitBody;
+  } catch {
+    return Response.json({ error: "Invalid request body" }, { status: 400 });
+  }
   const { token, data, files } = body;
 
   if (!token) {

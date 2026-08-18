@@ -230,11 +230,21 @@ export default function PublicForm({ token, merchant }: PublicFormProps) {
           files: {},
         }),
       });
-      const json = await res.json();
+      let json: { error?: string; success?: boolean } = {};
+      try {
+        json = await res.json();
+      } catch {
+        // Server returned non-JSON (e.g. HTML error page)
+        setServerError(isAr ? "حدث خطأ في الخادم، يرجى المحاولة مجدداً" : "Server error — please try again");
+        return;
+      }
       if (!res.ok) setServerError(json.error ?? (isAr ? "حدث خطأ أثناء الإرسال" : "Submission error"));
       else setSubmitted(true);
-    } catch {
-      setServerError(isAr ? "حدث خطأ في الاتصال، يرجى المحاولة مجدداً" : "Connection error — please try again");
+    } catch (err) {
+      const isNetwork = err instanceof TypeError;
+      setServerError(isNetwork
+        ? (isAr ? "حدث خطأ في الاتصال، يرجى المحاولة مجدداً" : "Connection error — please try again")
+        : (isAr ? "حدث خطأ غير متوقع، يرجى المحاولة مجدداً" : "Unexpected error — please try again"));
     } finally {
       setSubmitting(false);
     }
