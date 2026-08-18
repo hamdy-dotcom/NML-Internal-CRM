@@ -234,8 +234,7 @@ export default function PublicForm({ token, merchant }: PublicFormProps) {
       try {
         json = await res.json();
       } catch {
-        // Server returned non-JSON (e.g. HTML error page)
-        setServerError(isAr ? "حدث خطأ في الخادم، يرجى المحاولة مجدداً" : "Server error — please try again");
+        setServerError(isAr ? `حدث خطأ في الخادم (${res.status})، يرجى المحاولة مجدداً` : `Server error (${res.status}) — please try again`);
         return;
       }
       if (!res.ok) setServerError(json.error ?? (isAr ? "حدث خطأ أثناء الإرسال" : "Submission error"));

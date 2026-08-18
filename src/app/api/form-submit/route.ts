@@ -33,6 +33,16 @@ interface SubmitBody {
 }
 
 export async function POST(req: NextRequest) {
+  try {
+    return await handleSubmit(req);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[form-submit] unhandled:", msg);
+    return Response.json({ error: `Server error: ${msg}` }, { status: 500 });
+  }
+}
+
+async function handleSubmit(req: NextRequest) {
   // ── Rate limit ─────────────────────────────────────────────────────────
   const ip =
     req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "127.0.0.1";
