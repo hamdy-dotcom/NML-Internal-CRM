@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
-export async function proxy(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -29,10 +29,10 @@ export async function proxy(request: NextRequest) {
   // Public routes — no auth required
   if (
     pathname.startsWith("/f/") ||
+    pathname.startsWith("/api/form-submit") ||
     pathname === "/login" ||
-    pathname.startsWith("/auth/")   // /auth/callback, /auth/reset, /auth/update-password
+    pathname.startsWith("/auth/")
   ) {
-    // If already logged in and hitting /login, redirect to dashboard
     if (user && pathname === "/login") {
       return NextResponse.redirect(new URL("/", request.url));
     }
