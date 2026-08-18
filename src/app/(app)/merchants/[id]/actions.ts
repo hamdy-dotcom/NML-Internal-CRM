@@ -226,6 +226,22 @@ export async function revokeFormLink(
   }
 }
 
+// ── Delete form link ───────────────────────────────────────────────────────
+export async function deleteFormLink(
+  linkId: string,
+  merchantId: string,
+): Promise<{ error?: string }> {
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase.from('form_links').delete().eq('id', linkId);
+    if (error) return { error: error.message };
+    revalidate(merchantId);
+    return {};
+  } catch (e) {
+    return { error: extractMessage(e) };
+  }
+}
+
 // ── Onboarding step update ─────────────────────────────────────────────────
 export async function updateOnboardingStep(
   stepId: string,

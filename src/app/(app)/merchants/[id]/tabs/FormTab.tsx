@@ -7,7 +7,7 @@ import { fmtDateTime, fmtDate } from '@/lib/utils';
 import Modal from '@/components/ui/Modal';
 import EmptyState from '@/components/ui/EmptyState';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
-import { sendForm, revokeFormLink } from '../actions';
+import { sendForm, revokeFormLink, deleteFormLink } from '../actions';
 
 const STATUS_BADGE: Record<FormLinkStatus, string> = {
   sent:      'badge badge-ghost',
@@ -33,6 +33,7 @@ export default function FormTab({ merchant, formLinks, formTemplates, formSubmis
   const [selectedTemplate, setSelectedTemplate] = useState<string>(formTemplates[0]?.id ?? '');
   const [channel, setChannel] = useState<string>('whatsapp');
   const [revokeId, setRevokeId] = useState<string | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
@@ -115,6 +116,13 @@ export default function FormTab({ merchant, formLinks, formTemplates, formSubmis
                         </button>
                       </>
                     )}
+                    <button
+                      className="pill danger"
+                      style={{ fontSize: 11.5 }}
+                      onClick={() => setDeleteId(link.id)}
+                    >
+                      Delete
+                    </button>
                   </div>
                 </div>
 
@@ -191,6 +199,24 @@ export default function FormTab({ merchant, formLinks, formTemplates, formSubmis
         title="Revoke form link"
         body="The merchant will no longer be able to use this link."
         confirmLabel="Revoke"
+        danger
+      />
+
+      {/* Delete confirm */}
+      <ConfirmDialog
+        open={!!deleteId}
+        onClose={() => setDeleteId(null)}
+        onConfirm={() => {
+          if (!deleteId) return;
+          startTransition(async () => {
+            const res = await deleteFormLink(deleteId, merchant.id);
+            if (res.error) toast.error(res.error);
+            else { toast.success('Form link deleted.'); setDeleteId(null); }
+          });
+        }}
+        title="Delete form link"
+        body="This will permanently delete the form link and any submitted answers. This cannot be undone."
+        confirmLabel="Delete"
         danger
       />
     </div>
