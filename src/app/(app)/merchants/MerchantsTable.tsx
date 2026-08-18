@@ -86,7 +86,8 @@ export default function MerchantsTable({ rows, view }: Props) {
       onboarding: 'No merchants in onboarding.',
       active:     'No active merchants.',
       on_hold:    'No merchants on hold.',
-      lost:       'No lost merchants.',
+      lost:           'No lost merchants.',
+      not_interested: 'No merchants marked as not interested.',
       all:        'No merchants found. Try adjusting your filters.',
     };
     return (

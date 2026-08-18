@@ -24,7 +24,7 @@ do $$ begin create type team_type as enum
 exception when duplicate_object then null; end $$;
 
 do $$ begin create type merchant_stage as enum
-  ('new','assigned','contacted','interested','form_sent','cta_completed','onboarding','active','on_hold','lost');
+  ('new','assigned','contacted','interested','form_sent','cta_completed','onboarding','active','on_hold','lost','not_interested');
 exception when duplicate_object then null; end $$;
 
 do $$ begin create type merchant_priority as enum ('high','medium','low');

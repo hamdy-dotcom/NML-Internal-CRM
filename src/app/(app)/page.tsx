@@ -121,18 +121,18 @@ async function SpecialistDashboard({ userId, dateStart: _dateStart }: { userId: 
     rawStageRows,
   ] = await Promise.all([
     supabase.from("merchants").select("*", { count: "exact", head: true })
-      .eq("acquisition_owner_id", userId).not("stage", "in", "(active,lost)"),
+      .eq("acquisition_owner_id", userId).not("stage", "in", "(active,lost,not_interested)"),
     supabase.from("merchants").select("*", { count: "exact", head: true })
-      .eq("acquisition_owner_id", userId).lte("next_action_at", now).not("stage", "in", "(active,lost)"),
+      .eq("acquisition_owner_id", userId).lte("next_action_at", now).not("stage", "in", "(active,lost,not_interested)"),
     supabase.from("merchants").select("*", { count: "exact", head: true })
       .eq("acquisition_owner_id", userId).eq("stage", "form_sent"),
     supabase.from("merchants").select("*", { count: "exact", head: true })
       .eq("acquisition_owner_id", userId).gte("cta_completed_at", monthStart),
     supabase.from("merchants").select("id, store_name, phone, next_action_at, stage")
-      .eq("acquisition_owner_id", userId).lte("next_action_at", now).not("stage", "in", "(active,lost)")
+      .eq("acquisition_owner_id", userId).lte("next_action_at", now).not("stage", "in", "(active,lost,not_interested)")
       .order("next_action_at", { ascending: true }).limit(20),
     supabase.from("merchants").select("stage")
-      .eq("acquisition_owner_id", userId).not("stage", "in", "(active,lost)"),
+      .eq("acquisition_owner_id", userId).not("stage", "in", "(active,lost,not_interested)"),
   ]);
 
   const dueNow   = castRows<DueNowRow>(rawDueNow.data);
@@ -205,11 +205,11 @@ async function ManagerDashboard({ userId: _userId, dateStart: _dateStart }: { us
     { count: unassigned },
     rawStale,
   ] = await Promise.all([
-    supabase.from("merchants").select("stage").not("stage", "in", "(lost)"),
+    supabase.from("merchants").select("stage").not("stage", "in", "(lost,not_interested)"),
     supabase.from("v_specialist_performance").select("*"),
     supabase.from("merchants").select("*", { count: "exact", head: true }).eq("stage", "new"),
     supabase.from("merchants").select("id, store_name, stage, last_activity_at")
-      .lt("last_activity_at", staleDate).not("stage", "in", "(active,lost,on_hold)")
+      .lt("last_activity_at", staleDate).not("stage", "in", "(active,lost,on_hold,not_interested)")
       .order("last_activity_at", { ascending: true }).limit(20),
   ]);
 

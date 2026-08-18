@@ -97,6 +97,26 @@ export async function markLost(
   }
 }
 
+// ── Mark not interested ────────────────────────────────────────────────────
+export async function markNotInterested(
+  merchantId: string,
+  reason: string,
+): Promise<{ error?: string }> {
+  if (!reason.trim()) return { error: 'Reason is required.' };
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from('merchants')
+      .update({ stage: 'not_interested', lost_reason: reason.trim() })
+      .eq('id', merchantId);
+    if (error) return { error: error.message };
+    revalidate(merchantId);
+    return {};
+  } catch (e) {
+    return { error: extractMessage(e) };
+  }
+}
+
 // ── Log activity ───────────────────────────────────────────────────────────
 const LogActivitySchema = z.object({
   merchantId: z.string().uuid(),

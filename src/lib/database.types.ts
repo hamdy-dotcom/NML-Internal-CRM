@@ -3,7 +3,7 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 // ── Enums ──────────────────────────────────────────────────────────────────
 export type UserRole = "admin" | "acq_manager" | "acq_specialist" | "account_manager" | "catalog_ops" | "viewer";
 export type TeamType = "acquisition" | "account_management" | "catalog";
-export type MerchantStage = "new" | "assigned" | "contacted" | "interested" | "form_sent" | "cta_completed" | "onboarding" | "active" | "on_hold" | "lost";
+export type MerchantStage = "new" | "assigned" | "contacted" | "interested" | "form_sent" | "cta_completed" | "onboarding" | "active" | "on_hold" | "lost" | "not_interested";
 export type MerchantPriority = "high" | "medium" | "low";
 export type LeadSource = "salla_export" | "product_search" | "manual" | "referral" | "inbound";
 export type ActivityType = "call" | "whatsapp" | "email" | "meeting" | "visit" | "note" | "system";

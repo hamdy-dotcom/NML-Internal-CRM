@@ -41,8 +41,9 @@ export const STAGE_LABELS: Record<MerchantStage, string> = {
   cta_completed: "CTA done",
   onboarding:    "Onboarding",
   active:        "Active",
-  on_hold:       "On hold",
-  lost:          "Lost",
+  on_hold:        "On hold",
+  lost:           "Lost",
+  not_interested: "Not interested",
 };
 
 export const STAGE_ORDER: MerchantStage[] = [
@@ -67,6 +68,7 @@ export function stageBadgeClass(stage: MerchantStage): string {
     case "on_hold":
       return "badge badge-amber";
     case "lost":
+    case "not_interested":
       return "badge badge-red";
   }
 }

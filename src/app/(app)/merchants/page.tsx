@@ -14,8 +14,9 @@ const VIEWS = [
   { key: 'form_pending', label: 'Form sent, not submitted' },
   { key: 'onboarding',   label: 'In onboarding' },
   { key: 'active',       label: 'Active' },
-  { key: 'on_hold',      label: 'On hold' },
-  { key: 'lost',         label: 'Lost' },
+  { key: 'on_hold',        label: 'On hold' },
+  { key: 'lost',           label: 'Lost' },
+  { key: 'not_interested', label: 'Not interested' },
 ];
 
 interface PageProps {
@@ -56,7 +57,7 @@ export default async function MerchantsPage({ searchParams }: PageProps) {
     { count: overdueCount },
   ] = await Promise.all([
     supabase.from('merchants').select('*', { count: 'exact', head: true })
-      .not('stage', 'in', '(active,lost)'),
+      .not('stage', 'in', '(active,lost,not_interested)'),
     supabase.from('merchants').select('*', { count: 'exact', head: true })
       .eq('stage', 'form_sent'),
     supabase.from('merchants').select('*', { count: 'exact', head: true })
@@ -64,7 +65,7 @@ export default async function MerchantsPage({ searchParams }: PageProps) {
       .gte('cta_completed_at', firstOfMonth),
     supabase.from('merchants').select('*', { count: 'exact', head: true })
       .lt('next_action_at', now)
-      .not('stage', 'in', '(active,lost)'),
+      .not('stage', 'in', '(active,lost,not_interested)'),
   ]);
 
   // ── Build query ────────────────────────────────────────────────────────
@@ -76,7 +77,7 @@ export default async function MerchantsPage({ searchParams }: PageProps) {
   if (view === 'my' && user) {
     query = query.eq('acquisition_owner_id', user.id);
   } else if (view === 'needs') {
-    query = query.lt('next_action_at', now).not('stage', 'in', '(active,lost)');
+    query = query.lt('next_action_at', now).not('stage', 'in', '(active,lost,not_interested)');
   } else if (view === 'form_pending') {
     query = query.eq('stage', 'form_sent');
   } else if (view === 'onboarding') {
@@ -87,6 +88,8 @@ export default async function MerchantsPage({ searchParams }: PageProps) {
     query = query.eq('stage', 'on_hold');
   } else if (view === 'lost') {
     query = query.eq('stage', 'lost');
+  } else if (view === 'not_interested') {
+    query = query.eq('stage', 'not_interested');
   }
 
   // Additional filters

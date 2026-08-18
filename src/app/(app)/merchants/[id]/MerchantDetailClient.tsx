@@ -21,7 +21,7 @@ import OnboardingTab from './tabs/OnboardingTab';
 import TasksTab from './tabs/TasksTab';
 import FilesTab from './tabs/FilesTab';
 import {
-  changeStage, putOnHold, markLost, reassignMerchant, updateMerchantField,
+  changeStage, putOnHold, markLost, markNotInterested, reassignMerchant, updateMerchantField,
 } from './actions';
 
 const TABS = [
@@ -36,7 +36,7 @@ const TABS = [
 
 const STAGES_ORDER: MerchantStage[] = [
   'new', 'assigned', 'contacted', 'interested',
-  'form_sent', 'cta_completed', 'onboarding', 'active', 'on_hold', 'lost',
+  'form_sent', 'cta_completed', 'onboarding', 'active', 'on_hold', 'lost', 'not_interested',
 ];
 
 interface Props {
@@ -78,10 +78,12 @@ export default function MerchantDetailClient({
   const [menuOpen, setMenuOpen] = useState(false);
   const [holdOpen, setHoldOpen] = useState(false);
   const [lostOpen, setLostOpen] = useState(false);
+  const [notInterestedOpen, setNotInterestedOpen] = useState(false);
   const [reassignOpen, setReassignOpen] = useState(false);
   const [stageOpen, setStageOpen] = useState(false);
   const [holdReason, setHoldReason] = useState('');
   const [lostReason, setLostReason] = useState('');
+  const [notInterestedReason, setNotInterestedReason] = useState('');
   const [newOwner, setNewOwner] = useState<string | null>(null);
   const [newStage, setNewStage] = useState<MerchantStage>(merchant.stage);
   const [stageReason, setStageReason] = useState('');
@@ -211,6 +213,7 @@ export default function MerchantDetailClient({
                     { label: 'Change stage', action: () => openStageModal(merchant.stage) },
                     { label: 'Put on hold', action: () => { setHoldOpen(true); setMenuOpen(false); } },
                     { label: 'Mark lost', action: () => { setLostOpen(true); setMenuOpen(false); } },
+                    { label: 'Not interested', action: () => { setNotInterestedOpen(true); setMenuOpen(false); } },
                     { label: 'Reassign', action: () => { setReassignOpen(true); setMenuOpen(false); } },
                   ].map(item => (
                     <button
@@ -439,17 +442,19 @@ export default function MerchantDetailClient({
         >
           {STAGES_ORDER.map(s => <option key={s} value={s}>{STAGE_LABELS[s]}</option>)}
         </select>
-        {(newStage === 'on_hold' || newStage === 'lost') && (
+        {(newStage === 'on_hold' || newStage === 'lost' || newStage === 'not_interested') && (
           <>
-            <label className="field-label" style={{ marginTop: 12 }}>
-              Reason{newStage === 'lost' ? ' (required)' : ' (required)'}
-            </label>
+            <label className="field-label" style={{ marginTop: 12 }}>Reason (required)</label>
             <textarea
               className="field"
               rows={3}
               value={stageReason}
               onChange={e => setStageReason(e.target.value)}
-              placeholder={newStage === 'lost' ? 'Why was this merchant lost?' : 'Why is this merchant on hold?'}
+              placeholder={
+                newStage === 'lost' ? 'Why was this merchant lost?' :
+                newStage === 'not_interested' ? 'Why is the merchant not interested?' :
+                'Why is this merchant on hold?'
+              }
               autoFocus
             />
           </>
@@ -488,6 +493,23 @@ export default function MerchantDetailClient({
       </>}>
         <label className="field-label">Lost reason</label>
         <textarea className="field" value={lostReason} onChange={e => setLostReason(e.target.value)} placeholder="Why was this merchant lost?" />
+      </Modal>
+
+      {/* Not interested */}
+      <Modal open={notInterestedOpen} onClose={() => setNotInterestedOpen(false)} title="Mark as not interested" danger footer={<>
+        <button className="pill outline" onClick={() => setNotInterestedOpen(false)}>Cancel</button>
+        <button className="pill danger" disabled={!notInterestedReason.trim() || pending} onClick={() => {
+          startTransition(async () => {
+            const res = await markNotInterested(merchant.id, notInterestedReason);
+            if (res.error) toast.error(res.error);
+            else { toast.success('Merchant marked as not interested.'); setNotInterestedOpen(false); }
+          });
+        }}>
+          {pending ? 'Saving…' : 'Mark not interested'}
+        </button>
+      </>}>
+        <label className="field-label">Reason (required)</label>
+        <textarea className="field" rows={3} value={notInterestedReason} onChange={e => setNotInterestedReason(e.target.value)} placeholder="Why is the merchant not interested?" autoFocus />
       </Modal>
 
       {/* Reassign */}
