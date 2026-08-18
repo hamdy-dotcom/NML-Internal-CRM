@@ -15,7 +15,7 @@ const RAIL_STAGES: { key: MerchantStage; label: string; tsKey: keyof Merchant }[
 const STAGE_ORDER_IDX: Record<MerchantStage, number> = {
   new: 0, assigned: 1, contacted: 2, interested: 3,
   form_sent: 4, cta_completed: 5, onboarding: 6, active: 7,
-  on_hold: -1, lost: -1,
+  on_hold: -1, lost: -1, not_interested: -1,
 };
 
 function daysInStage(merchant: Merchant, idx: number): number | null {
@@ -80,6 +80,11 @@ export default function StageRail({ merchant, onStageClick }: StageRailProps) {
       {merchant.stage === "lost" && (
         <div style={{ marginTop: 8, fontSize: 11.5, color: "var(--red)", textAlign: "center" }}>
           Lost — {merchant.lost_reason}
+        </div>
+      )}
+      {merchant.stage === "not_interested" && (
+        <div style={{ marginTop: 8, fontSize: 11.5, color: "var(--red)", textAlign: "center" }}>
+          Not interested — {merchant.lost_reason}
         </div>
       )}
     </div>
