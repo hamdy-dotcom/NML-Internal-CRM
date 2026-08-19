@@ -91,6 +91,10 @@ export interface Merchant {
   hold_reason: string | null;
   tags: string[];
   notes: string | null;
+  industry: string | null;
+  avg_monthly_orders: number | null;
+  avg_monthly_sales: number | null;
+  store_type: string | null;
   acquisition_owner_id: string | null;
   account_manager_id: string | null;
   source: LeadSource;

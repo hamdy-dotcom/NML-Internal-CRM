@@ -9,21 +9,27 @@ import { undoBatch } from "./actions";
 import type { LeadSource } from "@/lib/database.types";
 
 // ── CRM target fields ──────────────────────────────────────────────────────────
-const CRM_FIELDS: { value: string; label: string }[] = [
-  { value: "store_name",    label: "Store name" },
-  { value: "store_url",     label: "Store URL" },
-  { value: "salla_store_id",label: "Salla store ID" },
-  { value: "owner_name",    label: "Owner name" },
-  { value: "phone",         label: "Phone" },
-  { value: "whatsapp",      label: "WhatsApp" },
-  { value: "email",         label: "Email" },
-  { value: "city",          label: "City" },
-  { value: "region",        label: "Region" },
-  { value: "category",      label: "Category" },
-  { value: "products_count",label: "Products count" },
-  { value: "rating",        label: "Rating" },
-  { value: "followers",     label: "Followers" },
+const CRM_FIELDS: { value: string; label: string; numeric?: boolean }[] = [
+  { value: "store_name",         label: "Store name" },
+  { value: "store_url",          label: "Store URL" },
+  { value: "salla_store_id",     label: "Salla store ID" },
+  { value: "owner_name",         label: "Owner name" },
+  { value: "phone",              label: "Phone" },
+  { value: "whatsapp",           label: "WhatsApp" },
+  { value: "email",              label: "Email" },
+  { value: "city",               label: "City" },
+  { value: "region",             label: "Region" },
+  { value: "category",           label: "Category" },
+  { value: "industry",           label: "Industry" },
+  { value: "store_type",         label: "Store type" },
+  { value: "avg_monthly_orders", label: "Avg monthly orders", numeric: true },
+  { value: "avg_monthly_sales",  label: "Avg monthly sales",  numeric: true },
+  { value: "products_count",     label: "Products count" },
+  { value: "rating",             label: "Rating" },
+  { value: "followers",          label: "Followers" },
 ];
+
+const NUMERIC_FIELDS = new Set(CRM_FIELDS.filter(f => f.numeric).map(f => f.value));
 
 const SOURCES: { value: LeadSource; label: string }[] = [
   { value: "salla_export", label: "Salla export" },
@@ -44,8 +50,8 @@ function guessField(header: string): string {
 // ── Template download ─────────────────────────────────────────────────────────
 const TEMPLATE_HEADERS = CRM_FIELDS.map((f) => f.label);
 const TEMPLATE_ROWS = [
-  ["متجر الأناقة","https://elegant.salla.sa","12345678","محمد العمري","0512345678","0512345678","info@elegant.sa","الرياض","الرياض","أزياء","320","4.8","15200"],
-  ["تقنية المستقبل","https://futuretech.salla.sa","87654321","سارة الأحمدي","0598765432","0598765432","hello@futuretech.sa","جدة","مكة المكرمة","إلكترونيات","85","4.5","8900"],
+  ["متجر الأناقة","https://elegant.salla.sa","12345678","محمد العمري","0512345678","0512345678","info@elegant.sa","الرياض","الرياض","أزياء","أزياء وملابس","retail","450","320000","320","4.8","15200"],
+  ["تقنية المستقبل","https://futuretech.salla.sa","87654321","سارة الأحمدي","0598765432","0598765432","hello@futuretech.sa","جدة","مكة المكرمة","إلكترونيات","إلكترونيات وتقنية","online","120","85000","85","4.5","8900"],
 ];
 
 function csvEscape(v: string) {
@@ -207,7 +213,7 @@ export default function ImportPage() {
     const resp = await fetch("/api/import/preview", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ rows, columnMap: map }),
+      body: JSON.stringify({ rows, columnMap: map, numericFields: Array.from(NUMERIC_FIELDS) }),
     });
     if (!resp.ok) throw new Error(await resp.text());
     return resp.json() as Promise<PreviewResult>;

@@ -15,10 +15,14 @@ interface Props {
   currentStages: string[];
   currentCity: string;
   currentPriority: string;
+  currentIndustry: string;
+  currentStoreType: string;
+  industryOptions: string[];
+  storeTypeOptions: string[];
   view: string;
 }
 
-export default function FilterBar({ currentQ, currentStages, currentCity, currentPriority, view }: Props) {
+export default function FilterBar({ currentQ, currentStages, currentCity, currentPriority, currentIndustry, currentStoreType, industryOptions, storeTypeOptions, view }: Props) {
   const router = useRouter();
   const sp = useSearchParams();
   const [open, setOpen] = useState(false);
@@ -30,9 +34,11 @@ export default function FilterBar({ currentQ, currentStages, currentCity, curren
   const [stages, setStages] = useState<string[]>(currentStages);
   const [city, setCity] = useState(currentCity);
   const [priority, setPriority] = useState(currentPriority);
+  const [industry, setIndustry] = useState(currentIndustry);
+  const [storeType, setStoreType] = useState(currentStoreType);
 
   // Active filter count
-  const activeCount = (currentStages.length > 0 ? 1 : 0) + (currentCity ? 1 : 0) + (currentPriority ? 1 : 0);
+  const activeCount = (currentStages.length > 0 ? 1 : 0) + (currentCity ? 1 : 0) + (currentPriority ? 1 : 0) + (currentIndustry ? 1 : 0) + (currentStoreType ? 1 : 0);
 
   // Close on outside click
   useEffect(() => {
@@ -50,6 +56,8 @@ export default function FilterBar({ currentQ, currentStages, currentCity, curren
     stages.forEach(s => next.append('stage', s));
     if (city.trim()) next.set('city', city.trim());
     if (priority) next.set('priority', priority);
+    if (industry) next.set('industry', industry);
+    if (storeType) next.set('store_type', storeType);
     next.delete('page');
     startTransition(() => {
       router.push(`/merchants?${next.toString()}`);
@@ -58,7 +66,7 @@ export default function FilterBar({ currentQ, currentStages, currentCity, curren
   }
 
   function clear() {
-    setStages([]); setCity(''); setPriority('');
+    setStages([]); setCity(''); setPriority(''); setIndustry(''); setStoreType('');
     const next = new URLSearchParams();
     if (view !== 'all') next.set('view', view);
     if (q.trim()) next.set('q', q.trim());
@@ -128,7 +136,7 @@ export default function FilterBar({ currentQ, currentStages, currentCity, curren
             </div>
 
             {/* Priority */}
-            <div style={{ marginBottom: 16 }}>
+            <div style={{ marginBottom: 12 }}>
               <label className="field-label">Priority</label>
               <select className="field" value={priority} onChange={e => setPriority(e.target.value)}>
                 <option value="">Any</option>
@@ -138,7 +146,29 @@ export default function FilterBar({ currentQ, currentStages, currentCity, curren
               </select>
             </div>
 
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            {/* Industry */}
+            {industryOptions.length > 0 && (
+              <div style={{ marginBottom: 12 }}>
+                <label className="field-label">Industry</label>
+                <select className="field" value={industry} onChange={e => setIndustry(e.target.value)}>
+                  <option value="">Any</option>
+                  {industryOptions.map(v => <option key={v} value={v}>{v}</option>)}
+                </select>
+              </div>
+            )}
+
+            {/* Store type */}
+            {storeTypeOptions.length > 0 && (
+              <div style={{ marginBottom: 12 }}>
+                <label className="field-label">Store type</label>
+                <select className="field" value={storeType} onChange={e => setStoreType(e.target.value)}>
+                  <option value="">Any</option>
+                  {storeTypeOptions.map(v => <option key={v} value={v}>{v}</option>)}
+                </select>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
               <button className="pill outline" style={{ fontSize: 12 }} onClick={clear}>Clear</button>
               <button className="pill dark" style={{ fontSize: 12 }} onClick={apply} disabled={pending}>
                 Apply

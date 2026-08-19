@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import type { VMerchantList, MerchantPriority } from '@/lib/database.types';
@@ -17,14 +17,36 @@ interface Props {
   view: string;
 }
 
-type SortKey = 'store_name' | 'city' | 'stage' | 'priority' | 'next_action_at' | 'product_total';
+type SortKey = 'store_name' | 'city' | 'stage' | 'priority' | 'next_action_at' | 'product_total' | 'industry' | 'avg_monthly_sales';
 type SortDir = 'asc' | 'desc';
+
+const OPTIONAL_COLS = ['industry', 'avg_monthly_sales'] as const;
+type OptionalCol = typeof OPTIONAL_COLS[number];
 
 export default function MerchantsTable({ rows, view }: Props) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sortKey, setSortKey] = useState<SortKey>('store_name');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
+  const [visibleCols, setVisibleCols] = useState<Set<OptionalCol>>(new Set());
+  const [colMenuOpen, setColMenuOpen] = useState(false);
+  const colMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (colMenuRef.current && !colMenuRef.current.contains(e.target as Node)) setColMenuOpen(false);
+    }
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  function toggleCol(col: OptionalCol) {
+    setVisibleCols(prev => {
+      const next = new Set(prev);
+      if (next.has(col)) next.delete(col); else next.add(col);
+      return next;
+    });
+  }
 
   // Bulk action modals
   const [reassignOpen, setReassignOpen] = useState(false);
@@ -46,6 +68,8 @@ export default function MerchantsTable({ rows, view }: Props) {
     else if (sortKey === 'priority') { av = a.priority; bv = b.priority; }
     else if (sortKey === 'next_action_at') { av = a.next_action_at; bv = b.next_action_at; }
     else if (sortKey === 'product_total') { av = a.product_total; bv = b.product_total; }
+    else if (sortKey === 'industry') { av = a.industry; bv = b.industry; }
+    else if (sortKey === 'avg_monthly_sales') { av = a.avg_monthly_sales; bv = b.avg_monthly_sales; }
     if (av == null && bv == null) return 0;
     if (av == null) return 1;
     if (bv == null) return -1;
@@ -101,6 +125,36 @@ export default function MerchantsTable({ rows, view }: Props) {
 
   return (
     <>
+      {/* Toolbar: columns toggle (always visible) */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+        <div style={{ position: 'relative' }} ref={colMenuRef}>
+          <button
+            className={`pill${visibleCols.size > 0 ? ' active' : ' outline'}`}
+            style={{ fontSize: 12, height: 30 }}
+            onClick={() => setColMenuOpen(o => !o)}
+          >
+            Columns{visibleCols.size > 0 ? ` · ${visibleCols.size}` : ''}
+          </button>
+          {colMenuOpen && (
+            <div
+              className="glass-card"
+              style={{ position: 'absolute', top: 36, right: 0, zIndex: 50, width: 200, padding: 12, boxShadow: 'var(--shadow)' }}
+            >
+              <div className="field-label" style={{ marginBottom: 8 }}>Optional columns</div>
+              {OPTIONAL_COLS.map(col => {
+                const labels: Record<OptionalCol, string> = { industry: 'Industry', avg_monthly_sales: 'Avg monthly sales' };
+                return (
+                  <label key={col} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, marginBottom: 8, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={visibleCols.has(col)} onChange={() => toggleCol(col)} style={{ cursor: 'pointer' }} />
+                    {labels[col]}
+                  </label>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Bulk bar */}
       {selected.size > 0 && (
         <div className="bulk-bar" style={{ marginBottom: 10 }}>
@@ -158,6 +212,16 @@ export default function MerchantsTable({ rows, view }: Props) {
               <th onClick={() => toggleSort('next_action_at')} style={{ cursor: 'pointer' }}>
                 Next action<SortArrow col="next_action_at" />
               </th>
+              {visibleCols.has('industry') && (
+                <th onClick={() => toggleSort('industry')} style={{ cursor: 'pointer' }}>
+                  Industry<SortArrow col="industry" />
+                </th>
+              )}
+              {visibleCols.has('avg_monthly_sales') && (
+                <th onClick={() => toggleSort('avg_monthly_sales')} style={{ cursor: 'pointer', textAlign: 'end' }}>
+                  Avg sales<SortArrow col="avg_monthly_sales" />
+                </th>
+              )}
             </tr>
           </thead>
           <tbody>
@@ -207,6 +271,18 @@ export default function MerchantsTable({ rows, view }: Props) {
                       <span style={{ color: 'var(--ink-4)' }}>—</span>
                     )}
                   </td>
+                  {visibleCols.has('industry') && (
+                    <td>
+                      <span style={{ color: 'var(--ink-2)', fontSize: 12.5 }}>{row.industry ?? '—'}</span>
+                    </td>
+                  )}
+                  {visibleCols.has('avg_monthly_sales') && (
+                    <td className="num">
+                      {row.avg_monthly_sales != null
+                        ? `SAR ${row.avg_monthly_sales.toLocaleString('en-US')}`
+                        : '—'}
+                    </td>
+                  )}
                 </tr>
               );
             })}

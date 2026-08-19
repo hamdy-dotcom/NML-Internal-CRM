@@ -26,6 +26,8 @@ interface PageProps {
     stage?: string | string[];
     city?: string;
     priority?: string;
+    industry?: string;
+    store_type?: string;
     view?: string;
   }>;
 }
@@ -41,6 +43,8 @@ export default async function MerchantsPage({ searchParams }: PageProps) {
     : [];
   const city = params.city?.trim() ?? '';
   const priority = params.priority ?? '';
+  const industry = params.industry?.trim() ?? '';
+  const storeType = params.store_type?.trim() ?? '';
   const view = params.view ?? 'all';
 
   const supabase = await createClient();
@@ -55,6 +59,8 @@ export default async function MerchantsPage({ searchParams }: PageProps) {
     { count: formsPendingCount },
     { count: ctaThisMonthCount },
     { count: overdueCount },
+    { data: industryLookups },
+    { data: storeTypeLookups },
   ] = await Promise.all([
     supabase.from('merchants').select('*', { count: 'exact', head: true })
       .not('stage', 'in', '(active,lost,not_interested)'),
@@ -66,7 +72,12 @@ export default async function MerchantsPage({ searchParams }: PageProps) {
     supabase.from('merchants').select('*', { count: 'exact', head: true })
       .lt('next_action_at', now)
       .not('stage', 'in', '(active,lost,not_interested)'),
+    supabase.from('lookups').select('value').eq('kind', 'industry').eq('is_active', true).order('sort_order'),
+    supabase.from('lookups').select('value').eq('kind', 'store_type').eq('is_active', true).order('sort_order'),
   ]);
+
+  const industryOptions = (industryLookups ?? []).map(r => r.value);
+  const storeTypeOptions = (storeTypeLookups ?? []).map(r => r.value);
 
   // ── Build query ────────────────────────────────────────────────────────
   let query = supabase
@@ -101,6 +112,12 @@ export default async function MerchantsPage({ searchParams }: PageProps) {
   }
   if (priority) {
     query = query.eq('priority', priority as import("@/lib/database.types").MerchantPriority);
+  }
+  if (industry) {
+    query = query.eq('industry', industry);
+  }
+  if (storeType) {
+    query = query.eq('store_type', storeType);
   }
   if (q) {
     query = query.textSearch('store_name', q, { type: 'websearch' });
@@ -140,7 +157,7 @@ export default async function MerchantsPage({ searchParams }: PageProps) {
 
         {/* Filter bar */}
         <div style={{ marginBottom: 14 }}>
-          <FilterBar currentQ={q} currentStages={stageFilter} currentCity={city} currentPriority={priority} view={view} />
+          <FilterBar currentQ={q} currentStages={stageFilter} currentCity={city} currentPriority={priority} currentIndustry={industry} currentStoreType={storeType} industryOptions={industryOptions} storeTypeOptions={storeTypeOptions} view={view} />
         </div>
 
         {/* Error */}
@@ -155,7 +172,7 @@ export default async function MerchantsPage({ searchParams }: PageProps) {
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <Pagination page={page} totalPages={totalPages} view={view} q={q} stages={stageFilter} city={city} priority={priority} />
+          <Pagination page={page} totalPages={totalPages} view={view} q={q} stages={stageFilter} city={city} priority={priority} industry={industry} storeType={storeType} />
         )}
       </div>
     </div>
@@ -164,9 +181,9 @@ export default async function MerchantsPage({ searchParams }: PageProps) {
 
 // ── Pagination ─────────────────────────────────────────────────────────────
 function Pagination({
-  page, totalPages, view, q, stages, city, priority,
+  page, totalPages, view, q, stages, city, priority, industry, storeType,
 }: {
-  page: number; totalPages: number; view: string; q: string; stages: string[]; city: string; priority: string;
+  page: number; totalPages: number; view: string; q: string; stages: string[]; city: string; priority: string; industry: string; storeType: string;
 }) {
   function href(p: number) {
     const sp = new URLSearchParams();
@@ -175,6 +192,8 @@ function Pagination({
     stages.forEach(s => sp.append('stage', s));
     if (city) sp.set('city', city);
     if (priority) sp.set('priority', priority);
+    if (industry) sp.set('industry', industry);
+    if (storeType) sp.set('store_type', storeType);
     sp.set('page', String(p));
     return `/merchants?${sp.toString()}`;
   }

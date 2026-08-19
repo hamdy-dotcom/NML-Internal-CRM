@@ -13,7 +13,7 @@ interface Props {
 
 // ── Inline editable field ──────────────────────────────────────────────────
 function EditableField({
-  merchantId, field, label, value, type = 'text', multiline = false,
+  merchantId, field, label, value, type = 'text', multiline = false, display,
 }: {
   merchantId: string;
   field: string;
@@ -21,6 +21,7 @@ function EditableField({
   value: string | null;
   type?: string;
   multiline?: boolean;
+  display?: string;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value ?? '');
@@ -78,7 +79,7 @@ function EditableField({
         onMouseOver={e => (e.currentTarget.style.border = '1px solid var(--g-line)')}
         onMouseOut={e => (e.currentTarget.style.border = '1px solid transparent')}
       >
-        {value ?? '—'}
+        {display ?? value ?? '—'}
       </span>
     </div>
   );
@@ -154,6 +155,10 @@ export default function OverviewTab({ merchant, tasks }: Props) {
         <EditableField merchantId={merchant.id} field="address" label="Address" value={merchant.address} multiline />
         <EditableField merchantId={merchant.id} field="category" label="Category" value={merchant.category} />
         <EditableField merchantId={merchant.id} field="sub_category" label="Sub-category" value={merchant.sub_category} />
+        <EditableField merchantId={merchant.id} field="industry" label="Industry" value={merchant.industry} />
+        <EditableField merchantId={merchant.id} field="store_type" label="Store type" value={merchant.store_type} />
+        <EditableField merchantId={merchant.id} field="avg_monthly_orders" label="Avg monthly orders" value={merchant.avg_monthly_orders != null ? String(merchant.avg_monthly_orders) : null} type="number" />
+        <EditableField merchantId={merchant.id} field="avg_monthly_sales" label="Avg monthly sales" value={merchant.avg_monthly_sales != null ? String(merchant.avg_monthly_sales) : null} type="number" display={merchant.avg_monthly_sales != null ? `SAR ${merchant.avg_monthly_sales.toLocaleString('en-US')}` : undefined} />
 
         <div className="kv">
           <span className="k">Salla store ID</span>

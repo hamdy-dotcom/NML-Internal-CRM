@@ -27,6 +27,7 @@ interface IncomingRow {
 interface PreviewRequest {
   rows: IncomingRow[];
   columnMap: Record<string, string>; // fileHeader → crmField
+  numericFields?: string[];
 }
 
 interface MappedRow {
@@ -54,7 +55,8 @@ function applyMap(row: IncomingRow, columnMap: Record<string, string>): MappedRo
 
 export async function POST(req: NextRequest) {
   const body = (await req.json()) as PreviewRequest;
-  const { rows, columnMap } = body;
+  const { rows, columnMap, numericFields = [] } = body;
+  const numericSet = new Set(numericFields);
 
   if (!Array.isArray(rows) || rows.length === 0) {
     return NextResponse.json({ new: [], duplicates: [], invalid: [] });
@@ -107,6 +109,15 @@ export async function POST(req: NextRequest) {
     // Validation
     if (!row.store_name) {
       invalid.push({ row, reason: "Missing store name" });
+      continue;
+    }
+    // Numeric field validation
+    const badNumeric = numericFields.find(
+      f => row[f] !== undefined && row[f] !== "" && isNaN(Number(row[f]))
+    );
+    if (badNumeric) {
+      const label = badNumeric.replace(/_/g, " ");
+      invalid.push({ row, reason: `"${label}" must be a number (got: "${row[badNumeric]}")` });
       continue;
     }
 
