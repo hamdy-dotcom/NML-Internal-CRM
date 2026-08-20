@@ -3,16 +3,24 @@ import { adminClient } from "@/lib/supabase/admin";
 import type { Json } from "@/lib/database.types";
 
 // ── In-memory rate limit (use Redis in production) ─────────────────────────
-const rateLimitMap = new Map<string, number>();
+// Tracks attempt timestamps per key; allows up to MAX_ATTEMPTS within WINDOW_MS.
+const rateLimitMap = new Map<string, number[]>();
 const RATE_LIMIT_WINDOW_MS = 60_000;
+const MAX_ATTEMPTS = 5;
 
 function isRateLimited(key: string): boolean {
-  const last = rateLimitMap.get(key);
   const now = Date.now();
-  if (last && now - last < RATE_LIMIT_WINDOW_MS) return true;
-  rateLimitMap.set(key, now);
+  const attempts = (rateLimitMap.get(key) ?? []).filter(t => now - t < RATE_LIMIT_WINDOW_MS);
+  if (attempts.length >= MAX_ATTEMPTS) return true;
+  attempts.push(now);
+  rateLimitMap.set(key, attempts);
   return false;
 }
+
+// Fields that the form pre-populates from merchant data — never block on these
+// being absent even if the form template schema marks them required, since the
+// merchant can't fill them without entering edit mode.
+const SCHEMA_OPTIONAL_OVERRIDE = new Set(["owner_name"]);
 
 // ── Merchant fields we allow the form to update ────────────────────────────
 const ALLOWED_MERCHANT_FIELDS = [
@@ -74,7 +82,7 @@ async function handleSubmit(req: NextRequest) {
   const rateLimitKey = `${ip}:${token}`;
   if (isRateLimited(rateLimitKey)) {
     return Response.json(
-      { error: "Too many submissions — please wait a moment and try again" },
+      { error: "حدث خطأ في الإرسال، يرجى الانتظار لحظة وإعادة المحاولة" },
       { status: 429 },
     );
   }
@@ -126,6 +134,7 @@ async function handleSubmit(req: NextRequest) {
   const missingFields: string[] = [];
   for (const field of schema) {
     if (!field.required) continue;
+    if (SCHEMA_OPTIONAL_OVERRIDE.has(field.key)) continue;
     const value = data[field.key];
     const isEmpty =
       value === undefined ||
