@@ -189,7 +189,6 @@ export default function PublicForm({ token, merchant }: PublicFormProps) {
     const e: Record<string, string> = {};
     const req = isAr ? "هذا الحقل مطلوب" : "Required";
     if (!storeName.trim()) e.store_name = req;
-    if (!ownerName.trim()) e.owner_name = req;
     if (!phone.trim())     e.phone = req;
     if (!productsCount.trim() || isNaN(Number(productsCount)) || Number(productsCount) < 0)
       e.products_ready_count = isAr ? "يرجى إدخال عدداً صحيحاً" : "Please enter a valid number";
@@ -371,13 +370,13 @@ export default function PublicForm({ token, merchant }: PublicFormProps) {
           {editingConfirm ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {[
-                { id: "store_name", ar: "اسم المتجر",          en: "Store name",      val: storeName, set: setStoreName, dir: undefined as "ltr" | undefined },
-                { id: "owner_name", ar: "المسؤول",             en: "Contact person",  val: ownerName, set: setOwnerName, dir: undefined as "ltr" | undefined },
-                { id: "phone",      ar: "الجوال",              en: "Mobile",          val: phone,     set: setPhone,     dir: "ltr" as const },
-                { id: "email",      ar: "البريد الإلكتروني",   en: "Email",           val: email,     set: setEmail,     dir: "ltr" as const },
+                { id: "store_name", ar: "اسم المتجر",          en: "Store name",      val: storeName, set: setStoreName, dir: undefined as "ltr" | undefined, req: true  },
+                { id: "owner_name", ar: "المسؤول",             en: "Contact person",  val: ownerName, set: setOwnerName, dir: undefined as "ltr" | undefined, req: false },
+                { id: "phone",      ar: "الجوال",              en: "Mobile",          val: phone,     set: setPhone,     dir: "ltr" as const,     req: true  },
+                { id: "email",      ar: "البريد الإلكتروني",   en: "Email",           val: email,     set: setEmail,     dir: "ltr" as const,     req: false },
               ].map(f => (
                 <div key={f.id}>
-                  {lbl(isAr ? f.ar : f.en, f.id !== "email")}
+                  {lbl(isAr ? f.ar : f.en, f.req)}
                   <input
                     type="text"
                     dir={f.dir}
