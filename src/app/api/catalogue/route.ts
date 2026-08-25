@@ -47,25 +47,16 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ categories });
     }
 
-    // ── Merchant list (only those that have catalogue products) ──────────────
+    // ── Merchant list — all shelf-ready merchants, sorted by name ────────────
     if (searchParams.get("type") === "merchants") {
       if (!merchantIds.length) return NextResponse.json({ merchants: [] });
 
-      // Distinct merchant_ids that have at least one product
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: prodRows } = await (adminClient.from("products") as any)
-        .select("merchant_id")
-        .in("merchant_id", merchantIds);
-
-      const distinctIds = [
-        ...new Set(((prodRows ?? []) as { merchant_id: string }[]).map(r => r.merchant_id)),
-      ];
-      if (!distinctIds.length) return NextResponse.json({ merchants: [] });
-
+      // Query merchants table directly — avoids the products scan that hits
+      // Supabase's 1000-row default cap and misses most merchants.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: mData } = await (adminClient.from("merchants") as any)
         .select("id, store_name")
-        .in("id", distinctIds)
+        .in("id", merchantIds)
         .order("store_name");
 
       return NextResponse.json({
@@ -77,10 +68,11 @@ export async function GET(req: NextRequest) {
     }
 
     // ── Product listing ──────────────────────────────────────────────────────
-    const search     = searchParams.get("search") ?? "";
-    const category   = searchParams.get("category") ?? "";
-    const merchantId = searchParams.get("merchant_id") ?? "";
-    const page       = Math.max(0, parseInt(searchParams.get("page") ?? "0", 10));
+    const search      = searchParams.get("search") ?? "";
+    const category    = searchParams.get("category") ?? "";
+    const merchantIdsParam = (searchParams.get("merchant_ids") ?? "")
+      .split(",").map(s => s.trim()).filter(Boolean);
+    const page        = Math.max(0, parseInt(searchParams.get("page") ?? "0", 10));
 
     if (!merchantIds.length) {
       return NextResponse.json({ products: [], total: 0, page });
@@ -95,9 +87,9 @@ export async function GET(req: NextRequest) {
       )
       .in("merchant_id", merchantIds);
 
-    if (search)     q = q.ilike("name", `%${search}%`);
-    if (category)   q = q.eq("category_mapped", category);
-    if (merchantId) q = q.eq("merchant_id", merchantId);
+    if (search)                q = q.ilike("name", `%${search}%`);
+    if (category)              q = q.eq("category_mapped", category);
+    if (merchantIdsParam.length) q = q.in("merchant_id", merchantIdsParam);
 
     const from = page * PAGE_SIZE;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

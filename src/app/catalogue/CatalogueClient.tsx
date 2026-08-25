@@ -22,41 +22,7 @@ interface MerchantOption {
   name: string;
 }
 
-function Pagination({ page, total, onChange }: { page: number; total: number; onChange: (p: number) => void }) {
-  const totalPages = Math.ceil(total / PAGE_SIZE);
-  if (totalPages <= 1) return null;
-
-  const pages: (number | "…")[] = [];
-  for (let i = 0; i < totalPages; i++) {
-    if (i === 0 || i === totalPages - 1 || Math.abs(i - page) <= 1) pages.push(i);
-    else if (pages[pages.length - 1] !== "…") pages.push("…");
-  }
-
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "center", marginTop: 32, flexWrap: "wrap" }}>
-      {pages.map((p, i) =>
-        p === "…" ? (
-          <span key={`e${i}`} style={{ fontSize: 13, color: "var(--ink-3)", padding: "0 4px" }}>…</span>
-        ) : (
-          <button
-            key={p}
-            onClick={() => onChange(p as number)}
-            style={{
-              width: 32, height: 32, borderRadius: 8, border: "none", cursor: "pointer", fontSize: 13,
-              background: p === page ? "rgba(255,255,255,.85)" : "transparent",
-              color: p === page ? "var(--ink)" : "var(--ink-3)",
-              boxShadow: p === page ? "0 2px 8px rgba(40,60,110,.10)" : "none",
-              fontWeight: p === page ? 500 : 400,
-            }}
-          >
-            {(p as number) + 1}
-          </button>
-        )
-      )}
-    </div>
-  );
-}
-
+// ── Single-select combobox (category) ───────────────────────────────────────
 function Combobox({
   label, placeholder, value, options, onSelect, dir = "ltr",
 }: {
@@ -106,22 +72,14 @@ function Combobox({
           borderRadius: 12, boxShadow: "0 12px 32px rgba(40,60,110,.14)",
           maxHeight: 240, overflowY: "auto",
         }}>
-          <div
-            style={{ padding: "9px 14px", cursor: "pointer", fontSize: 13, color: "var(--ink-3)" }}
-            onMouseDown={() => { onSelect(""); setDraft(""); }}
-          >
+          <div style={{ padding: "9px 14px", cursor: "pointer", fontSize: 13, color: "var(--ink-3)" }}
+            onMouseDown={() => { onSelect(""); setDraft(""); }}>
             {placeholder}
           </div>
           {filtered.map(o => (
-            <div
-              key={o.value}
-              style={{
-                padding: "9px 14px", cursor: "pointer", fontSize: 13,
-                borderTop: "1px solid rgba(0,0,0,.04)",
-                background: value === o.value ? "rgba(220,38,38,.06)" : "transparent",
-              }}
-              onMouseDown={() => { onSelect(o.value); setDraft(o.label); }}
-            >
+            <div key={o.value}
+              style={{ padding: "9px 14px", cursor: "pointer", fontSize: 13, borderTop: "1px solid rgba(0,0,0,.04)", background: value === o.value ? "rgba(220,38,38,.06)" : "transparent" }}
+              onMouseDown={() => { onSelect(o.value); setDraft(o.label); }}>
               <span dir={dir}>{o.label}</span>
             </div>
           ))}
@@ -131,6 +89,185 @@ function Combobox({
   );
 }
 
+// ── Multi-select merchant dropdown ───────────────────────────────────────────
+function MerchantMultiSelect({
+  options,
+  selected,
+  onChange,
+}: {
+  options: MerchantOption[];
+  selected: Set<string>;
+  onChange: (next: Set<string>) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const filtered = options.filter(o =>
+    !search || o.name.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const toggle = (id: string) => {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    onChange(next);
+  };
+
+  const label = selected.size === 0
+    ? "All merchants"
+    : selected.size === 1
+    ? (options.find(o => o.id === [...selected][0])?.name ?? "1 merchant")
+    : `${selected.size} merchants`;
+
+  return (
+    <div ref={containerRef} style={{ flex: "1 1 200px", minWidth: 160, position: "relative" }}>
+      <label style={{ display: "block", fontSize: 11.5, fontWeight: 500, color: "var(--ink-3)", marginBottom: 5, textTransform: "uppercase", letterSpacing: ".06em" }}>
+        Merchant
+      </label>
+
+      {/* Trigger */}
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          width: "100%", padding: "9px 32px 9px 14px", borderRadius: 10,
+          border: "1px solid var(--g-line)",
+          background: selected.size > 0 ? "rgba(220,38,38,.06)" : "rgba(255,255,255,.7)",
+          color: selected.size > 0 ? "#b91c1c" : "var(--ink-3)",
+          fontSize: 13, textAlign: "left", cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          boxSizing: "border-box",
+        }}
+      >
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
+        <span style={{ fontSize: 10, opacity: .6, flexShrink: 0, marginLeft: 6 }}>{open ? "▲" : "▼"}</span>
+      </button>
+
+      {selected.size > 0 && (
+        <button
+          onClick={() => onChange(new Set())}
+          style={{ position: "absolute", right: 28, top: "calc(50% + 10px)", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "var(--ink-3)", fontSize: 16, lineHeight: 1, padding: 2 }}
+        >
+          ×
+        </button>
+      )}
+
+      {/* Dropdown */}
+      {open && (
+        <div style={{
+          position: "absolute", top: "100%", left: 0, right: 0, zIndex: 50, marginTop: 4,
+          background: "rgba(255,255,255,.99)", border: "1px solid var(--g-line)",
+          borderRadius: 12, boxShadow: "0 12px 32px rgba(40,60,110,.16)",
+          display: "flex", flexDirection: "column", maxHeight: 300,
+        }}>
+          {/* Search inside dropdown */}
+          <div style={{ padding: "10px 12px 8px", borderBottom: "1px solid rgba(0,0,0,.06)", flexShrink: 0 }}>
+            <input
+              autoFocus
+              type="text"
+              placeholder="Filter merchants…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              style={{ width: "100%", padding: "6px 10px", borderRadius: 8, border: "1px solid var(--g-line)", background: "#f5f6f8", fontSize: 12.5, boxSizing: "border-box", outline: "none" }}
+            />
+          </div>
+
+          {/* "All" shortcut */}
+          {selected.size > 0 && (
+            <div
+              style={{ padding: "8px 14px", fontSize: 12.5, color: "#b91c1c", cursor: "pointer", fontWeight: 500, flexShrink: 0, borderBottom: "1px solid rgba(0,0,0,.04)" }}
+              onMouseDown={e => { e.preventDefault(); onChange(new Set()); }}
+            >
+              Clear all ({selected.size} selected)
+            </div>
+          )}
+
+          {/* Merchant list */}
+          <div style={{ overflowY: "auto", flex: 1 }}>
+            {filtered.length === 0 ? (
+              <div style={{ padding: "12px 14px", fontSize: 12.5, color: "var(--ink-3)" }}>No matches</div>
+            ) : filtered.map(o => {
+              const checked = selected.has(o.id);
+              return (
+                <div
+                  key={o.id}
+                  onMouseDown={e => { e.preventDefault(); toggle(o.id); }}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 10,
+                    padding: "9px 14px", cursor: "pointer", fontSize: 13,
+                    borderBottom: "1px solid rgba(0,0,0,.03)",
+                    background: checked ? "rgba(220,38,38,.05)" : "transparent",
+                  }}
+                >
+                  {/* Checkbox */}
+                  <div style={{
+                    width: 16, height: 16, borderRadius: 4, flexShrink: 0,
+                    border: checked ? "none" : "1.5px solid #c5cdd8",
+                    background: checked ? "#dc2626" : "transparent",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>
+                    {checked && <span style={{ color: "#fff", fontSize: 10, lineHeight: 1 }}>✓</span>}
+                  </div>
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o.name}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Pagination ───────────────────────────────────────────────────────────────
+function Pagination({ page, total, onChange }: { page: number; total: number; onChange: (p: number) => void }) {
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+  if (totalPages <= 1) return null;
+
+  const pages: (number | "…")[] = [];
+  for (let i = 0; i < totalPages; i++) {
+    if (i === 0 || i === totalPages - 1 || Math.abs(i - page) <= 1) pages.push(i);
+    else if (pages[pages.length - 1] !== "…") pages.push("…");
+  }
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "center", marginTop: 32, flexWrap: "wrap" }}>
+      {pages.map((p, i) =>
+        p === "…" ? (
+          <span key={`e${i}`} style={{ fontSize: 13, color: "var(--ink-3)", padding: "0 4px" }}>…</span>
+        ) : (
+          <button
+            key={p}
+            onClick={() => onChange(p as number)}
+            style={{
+              width: 32, height: 32, borderRadius: 8, border: "none", cursor: "pointer", fontSize: 13,
+              background: p === page ? "rgba(255,255,255,.85)" : "transparent",
+              color: p === page ? "var(--ink)" : "var(--ink-3)",
+              boxShadow: p === page ? "0 2px 8px rgba(40,60,110,.10)" : "none",
+              fontWeight: p === page ? 500 : 400,
+            }}
+          >
+            {(p as number) + 1}
+          </button>
+        )
+      )}
+    </div>
+  );
+}
+
+// ── Main client ──────────────────────────────────────────────────────────────
 export default function CatalogueClient() {
   const [products,      setProducts]      = useState<Product[]>([]);
   const [total,         setTotal]         = useState(0);
@@ -140,15 +277,14 @@ export default function CatalogueClient() {
   const [search,        setSearch]        = useState("");
   const [searchDraft,   setSearchDraft]   = useState("");
   const [category,      setCategory]      = useState("");
-  const [merchantId,    setMerchantId]    = useState("");
+  const [selectedMerchants, setSelectedMerchants] = useState<Set<string>>(new Set());
   const [catOptions,    setCatOptions]    = useState<string[]>([]);
   const [merchantOpts,  setMerchantOpts]  = useState<MerchantOption[]>([]);
   const [activeProduct, setActiveProduct] = useState<Product | null>(null);
 
-  const abortRef   = useRef<AbortController | null>(null);
+  const abortRef    = useRef<AbortController | null>(null);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Load category and merchant options once
   useEffect(() => {
     fetch("/api/catalogue?type=categories")
       .then(r => r.json())
@@ -160,7 +296,7 @@ export default function CatalogueClient() {
       .catch(() => {});
   }, []);
 
-  const fetchProducts = useCallback(async (s: string, cat: string, mid: string, pg: number) => {
+  const fetchProducts = useCallback(async (s: string, cat: string, merchants: Set<string>, pg: number) => {
     abortRef.current?.abort();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
@@ -168,9 +304,9 @@ export default function CatalogueClient() {
     setError(null);
 
     const params = new URLSearchParams({ page: String(pg) });
-    if (s)   params.set("search", s);
-    if (cat) params.set("category", cat);
-    if (mid) params.set("merchant_id", mid);
+    if (s)               params.set("search", s);
+    if (cat)             params.set("category", cat);
+    if (merchants.size)  params.set("merchant_ids", [...merchants].join(","));
 
     try {
       const resp = await fetch(`/api/catalogue?${params}`, { signal: ctrl.signal });
@@ -188,27 +324,21 @@ export default function CatalogueClient() {
   }, []);
 
   useEffect(() => {
-    fetchProducts(search, category, merchantId, page);
-  }, [search, category, merchantId, page, fetchProducts]);
+    fetchProducts(search, category, selectedMerchants, page);
+  }, [search, category, selectedMerchants, page, fetchProducts]);
 
   const handleSearch = (val: string) => {
     setSearchDraft(val);
     if (searchTimer.current) clearTimeout(searchTimer.current);
-    searchTimer.current = setTimeout(() => {
-      setPage(0);
-      setSearch(val);
-    }, 350);
+    searchTimer.current = setTimeout(() => { setPage(0); setSearch(val); }, 350);
   };
 
   const catOptionList = catOptions.map(c => ({ value: c, label: c }));
-  const merchantOptionList = merchantOpts.map(m => ({ value: m.id, label: m.name }));
-  const selectedMerchantLabel = merchantOpts.find(m => m.id === merchantId)?.name ?? "";
 
   return (
     <div>
       {/* Controls */}
       <div style={{ display: "flex", gap: 10, marginBottom: 24, flexWrap: "wrap", alignItems: "flex-end" }}>
-        {/* Search */}
         <div style={{ flex: "1 1 180px", minWidth: 140 }}>
           <label style={{ display: "block", fontSize: 11.5, fontWeight: 500, color: "var(--ink-3)", marginBottom: 5, textTransform: "uppercase", letterSpacing: ".06em" }}>
             Search
@@ -231,12 +361,10 @@ export default function CatalogueClient() {
           dir="rtl"
         />
 
-        <Combobox
-          label="Merchant"
-          placeholder="All merchants"
-          value={selectedMerchantLabel}
-          options={merchantOptionList}
-          onSelect={v => { setMerchantId(v); setPage(0); }}
+        <MerchantMultiSelect
+          options={merchantOpts}
+          selected={selectedMerchants}
+          onChange={next => { setSelectedMerchants(next); setPage(0); }}
         />
       </div>
 
@@ -245,7 +373,7 @@ export default function CatalogueClient() {
         <div style={{ textAlign: "center", padding: "48px 0" }}>
           <div style={{ fontSize: 13, color: "var(--red, #dc2626)", marginBottom: 12 }}>{error}</div>
           <button
-            onClick={() => fetchProducts(search, category, merchantId, page)}
+            onClick={() => fetchProducts(search, category, selectedMerchants, page)}
             style={{ padding: "8px 18px", borderRadius: 10, border: "1px solid var(--g-line)", background: "rgba(255,255,255,.7)", cursor: "pointer", fontSize: 13 }}
           >
             Retry
@@ -253,7 +381,7 @@ export default function CatalogueClient() {
         </div>
       )}
 
-      {/* Responsive grid — 4+ cards on mobile, fills width on desktop */}
+      {/* Responsive grid — 4 cards on mobile, fills width on desktop */}
       <style>{`
         .cat-grid {
           display: grid;
@@ -273,72 +401,22 @@ export default function CatalogueClient() {
           cursor: pointer;
           transition: box-shadow .15s, transform .15s;
         }
-        .cat-card:hover {
-          box-shadow: 0 8px 28px rgba(40,60,110,.14);
-          transform: translateY(-2px);
-        }
-        .cat-card-img {
-          width: 100%;
-          aspect-ratio: 1;
-          object-fit: cover;
-          border-radius: 10px;
-          margin-bottom: 12px;
-          display: block;
-        }
-        .cat-card-img-ph {
-          width: 100%;
-          aspect-ratio: 1;
-          border-radius: 10px;
-          background: rgba(120,135,160,.1);
-          margin-bottom: 12px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 36px;
-          color: rgba(120,135,160,.3);
-        }
-        .cat-card-name {
-          font-weight: 500;
-          font-size: 13.5px;
-          color: var(--ink);
-          margin-bottom: 5px;
-          line-height: 1.35;
-          display: -webkit-box;
-          -webkit-line-clamp: 2;
-          -webkit-box-orient: vertical;
-          overflow: hidden;
-        }
-        .cat-card-cat {
-          font-size: 11.5px;
-          color: var(--ink-3);
-          margin-bottom: 6px;
-          direction: rtl;
-          text-align: right;
-        }
-        .cat-card-price {
-          margin-top: auto;
-          font-size: 14px;
-          font-weight: 600;
-          color: var(--ink);
-          font-variant-numeric: tabular-nums;
-        }
+        .cat-card:hover { box-shadow: 0 8px 28px rgba(40,60,110,.14); transform: translateY(-2px); }
+        .cat-card-img { width:100%; aspect-ratio:1; object-fit:cover; border-radius:10px; margin-bottom:12px; display:block; }
+        .cat-card-img-ph { width:100%; aspect-ratio:1; border-radius:10px; background:rgba(120,135,160,.1); margin-bottom:12px; display:flex; align-items:center; justify-content:center; font-size:36px; color:rgba(120,135,160,.3); }
+        .cat-card-name { font-weight:500; font-size:13.5px; color:var(--ink); margin-bottom:5px; line-height:1.35; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+        .cat-card-cat  { font-size:11.5px; color:var(--ink-3); margin-bottom:6px; direction:rtl; text-align:right; }
+        .cat-card-price { margin-top:auto; font-size:14px; font-weight:600; color:var(--ink); font-variant-numeric:tabular-nums; }
         @keyframes pulse { 0%,100%{opacity:.6} 50%{opacity:1} }
         @media (max-width: 640px) {
-          .cat-grid {
-            grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
-            gap: 8px;
-          }
-          .cat-card {
-            padding: 8px;
-            border-radius: 10px;
-            box-shadow: none;
-          }
+          .cat-grid { grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 8px; }
+          .cat-card { padding: 8px; border-radius: 10px; box-shadow: none; }
           .cat-card:hover { transform: none; box-shadow: none; }
-          .cat-card-img { border-radius: 7px; margin-bottom: 7px; }
-          .cat-card-img-ph { border-radius: 7px; margin-bottom: 7px; font-size: 22px; }
-          .cat-card-name { font-size: 11px; margin-bottom: 3px; }
-          .cat-card-cat  { font-size: 10px; margin-bottom: 3px; }
-          .cat-card-price { font-size: 11.5px; }
+          .cat-card-img { border-radius:7px; margin-bottom:7px; }
+          .cat-card-img-ph { border-radius:7px; margin-bottom:7px; font-size:22px; }
+          .cat-card-name { font-size:11px; margin-bottom:3px; }
+          .cat-card-cat  { font-size:10px; margin-bottom:3px; }
+          .cat-card-price { font-size:11.5px; }
         }
       `}</style>
 
@@ -367,9 +445,7 @@ export default function CatalogueClient() {
                   }
                   <div className="cat-card-name">{p.name}</div>
                   {p.category_mapped && <div className="cat-card-cat">{p.category_mapped}</div>}
-                  {p.price != null && (
-                    <div className="cat-card-price">SAR {Number(p.price).toLocaleString("en-US")}</div>
-                  )}
+                  {p.price != null && <div className="cat-card-price">SAR {Number(p.price).toLocaleString("en-US")}</div>}
                 </div>
               ))
           }
@@ -379,10 +455,7 @@ export default function CatalogueClient() {
       <Pagination page={page} total={total} onChange={p => { setPage(p); window.scrollTo({ top: 0, behavior: "smooth" }); }} />
 
       {activeProduct && (
-        <CatalogueProductModal
-          product={activeProduct}
-          onClose={() => setActiveProduct(null)}
-        />
+        <CatalogueProductModal product={activeProduct} onClose={() => setActiveProduct(null)} />
       )}
     </div>
   );
