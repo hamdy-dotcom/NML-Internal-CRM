@@ -11,17 +11,11 @@ interface Product {
   price: number | null;
 }
 
-interface CategoryOption {
-  mapped_category: string;
-  product_count: number;
-}
+type CategoryOption = string;
 
 function Pagination({ page, total, onChange }: { page: number; total: number; onChange: (p: number) => void }) {
   const totalPages = Math.ceil(total / PAGE_SIZE);
   if (totalPages <= 1) return null;
-
-  const from = page * PAGE_SIZE + 1;
-  const to   = Math.min((page + 1) * PAGE_SIZE, total);
 
   const pages: (number | "…")[] = [];
   for (let i = 0; i < totalPages; i++) {
@@ -31,9 +25,6 @@ function Pagination({ page, total, onChange }: { page: number; total: number; on
 
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "center", marginTop: 32, flexWrap: "wrap" }}>
-      <span style={{ fontSize: 12, color: "var(--ink-3)", marginRight: 8 }}>
-        {from.toLocaleString("en-US")}–{to.toLocaleString("en-US")} of {total.toLocaleString("en-US")}
-      </span>
       {pages.map((p, i) =>
         p === "…" ? (
           <span key={`e${i}`} style={{ fontSize: 13, color: "var(--ink-3)", padding: "0 4px" }}>…</span>
@@ -76,7 +67,7 @@ export default function CatalogueClient() {
   useEffect(() => {
     fetch("/api/catalogue?type=categories")
       .then(r => r.json())
-      .then(d => setCatOptions(d.categories ?? []))
+      .then(d => setCatOptions((d.categories ?? []) as string[]))
       .catch(() => {});
   }, []);
 
@@ -126,7 +117,7 @@ export default function CatalogueClient() {
   };
 
   const visibleCats = catOptions
-    .filter(o => !category || o.mapped_category.toLowerCase().includes(category.toLowerCase()))
+    .filter(o => !category || o.toLowerCase().includes(category.toLowerCase()))
     .slice(0, 30);
 
   return (
@@ -185,29 +176,21 @@ export default function CatalogueClient() {
               </div>
               {visibleCats.map(o => (
                 <div
-                  key={o.mapped_category}
+                  key={o}
                   style={{
                     padding: "9px 14px", cursor: "pointer", fontSize: 13,
-                    display: "flex", justifyContent: "space-between", alignItems: "center",
                     borderTop: "1px solid rgba(0,0,0,.04)",
-                    background: category === o.mapped_category ? "rgba(220,38,38,.06)" : "transparent",
+                    background: category === o ? "rgba(220,38,38,.06)" : "transparent",
                   }}
-                  onMouseDown={() => selectCategory(o.mapped_category)}
+                  onMouseDown={() => selectCategory(o)}
                 >
-                  <span dir="rtl">{o.mapped_category}</span>
-                  <span style={{ fontSize: 11.5, color: "var(--ink-3)", flexShrink: 0, marginLeft: 8 }}>
-                    {o.product_count.toLocaleString("en-US")}
-                  </span>
+                  <span dir="rtl">{o}</span>
                 </div>
               ))}
             </div>
           )}
         </div>
 
-        {/* Count */}
-        <div style={{ alignSelf: "flex-end", paddingBottom: 10, fontSize: 13, color: "var(--ink-3)", whiteSpace: "nowrap" }}>
-          {loading ? "…" : `${total.toLocaleString("en-US")} products`}
-        </div>
       </div>
 
       {/* Error */}
