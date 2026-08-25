@@ -9,6 +9,8 @@ interface CatalogueProduct {
   category_mapped: string | null;
   price: number | null;
   description: string | null;
+  url: string | null;
+  merchant_name: string | null;
 }
 
 interface Props {
@@ -243,6 +245,36 @@ export default function CatalogueProductModal({ product, onClose }: Props) {
                 <div style={{ fontSize: 28, fontWeight: 700, color: "#1c2536", fontVariantNumeric: "tabular-nums", letterSpacing: "-.01em" }}>
                   SAR {Number(product.price).toLocaleString("en-US")}
                 </div>
+              </div>
+            )}
+
+            {/* Merchant + source link */}
+            {(product.merchant_name || product.url) && (
+              <div style={{ marginBottom: 24, flexShrink: 0 }}>
+                {product.merchant_name && (
+                  <div style={{ marginBottom: product.url ? 10 : 0 }}>
+                    <div style={{ fontSize: 11.5, fontWeight: 500, color: "#8896aa", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 4 }}>
+                      Merchant
+                    </div>
+                    <div style={{ fontSize: 14, color: "#1c2536" }}>{product.merchant_name}</div>
+                  </div>
+                )}
+                {product.url && (
+                  <a
+                    href={product.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: 6,
+                      padding: "8px 16px", borderRadius: 10,
+                      background: "rgba(220,38,38,.07)", border: "1px solid rgba(220,38,38,.18)",
+                      color: "#b91c1c", fontSize: 13, fontWeight: 500,
+                      textDecoration: "none", marginTop: product.merchant_name ? 10 : 0,
+                    }}
+                  >
+                    <span style={{ fontSize: 15 }}>↗</span> View on Salla
+                  </a>
+                )}
               </div>
             )}
 

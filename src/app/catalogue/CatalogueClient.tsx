@@ -12,9 +12,15 @@ interface Product {
   category_mapped: string | null;
   price: number | null;
   description: string | null;
+  url: string | null;
+  merchant_id: string | null;
+  merchant_name: string | null;
 }
 
-type CategoryOption = string;
+interface MerchantOption {
+  id: string;
+  name: string;
+}
 
 function Pagination({ page, total, onChange }: { page: number; total: number; onChange: (p: number) => void }) {
   const totalPages = Math.ceil(total / PAGE_SIZE);
@@ -51,31 +57,110 @@ function Pagination({ page, total, onChange }: { page: number; total: number; on
   );
 }
 
-export default function CatalogueClient() {
-  const [products,   setProducts]   = useState<Product[]>([]);
-  const [total,      setTotal]      = useState(0);
-  const [page,       setPage]       = useState(0);
-  const [loading,    setLoading]    = useState(true);
-  const [error,      setError]      = useState<string | null>(null);
-  const [search,     setSearch]     = useState("");
-  const [category,   setCategory]   = useState("");
-  const [catOptions,  setCatOptions]  = useState<CategoryOption[]>([]);
-  const [activeProduct, setActiveProduct] = useState<Product | null>(null);
-  const [catOpen,    setCatOpen]    = useState(false);
-  const [searchDraft, setSearchDraft] = useState("");
+function Combobox({
+  label, placeholder, value, options, onSelect, dir = "ltr",
+}: {
+  label: string;
+  placeholder: string;
+  value: string;
+  options: { value: string; label: string }[];
+  onSelect: (v: string) => void;
+  dir?: "ltr" | "rtl";
+}) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState(value);
 
-  const abortRef = useRef<AbortController | null>(null);
+  useEffect(() => { setDraft(value); }, [value]);
+
+  const filtered = options.filter(o =>
+    !draft || o.label.toLowerCase().includes(draft.toLowerCase())
+  ).slice(0, 40);
+
+  return (
+    <div style={{ flex: "1 1 200px", minWidth: 160, position: "relative" }}>
+      <label style={{ display: "block", fontSize: 11.5, fontWeight: 500, color: "var(--ink-3)", marginBottom: 5, textTransform: "uppercase", letterSpacing: ".06em" }}>
+        {label}
+      </label>
+      <input
+        type="text"
+        placeholder={placeholder}
+        value={draft}
+        dir={dir}
+        onChange={e => { setDraft(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        style={{ width: "100%", padding: "9px 32px 9px 14px", borderRadius: 10, border: "1px solid var(--g-line)", background: "rgba(255,255,255,.7)", color: "var(--ink)", fontSize: 13, boxSizing: "border-box" }}
+      />
+      {value && (
+        <button
+          onClick={() => { onSelect(""); setDraft(""); }}
+          style={{ position: "absolute", right: 10, top: "calc(50% + 10px)", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "var(--ink-3)", fontSize: 16, lineHeight: 1, padding: 2 }}
+        >
+          ×
+        </button>
+      )}
+      {open && filtered.length > 0 && (
+        <div style={{
+          position: "absolute", top: "100%", left: 0, right: 0, zIndex: 50, marginTop: 4,
+          background: "rgba(255,255,255,.98)", border: "1px solid var(--g-line)",
+          borderRadius: 12, boxShadow: "0 12px 32px rgba(40,60,110,.14)",
+          maxHeight: 240, overflowY: "auto",
+        }}>
+          <div
+            style={{ padding: "9px 14px", cursor: "pointer", fontSize: 13, color: "var(--ink-3)" }}
+            onMouseDown={() => { onSelect(""); setDraft(""); }}
+          >
+            {placeholder}
+          </div>
+          {filtered.map(o => (
+            <div
+              key={o.value}
+              style={{
+                padding: "9px 14px", cursor: "pointer", fontSize: 13,
+                borderTop: "1px solid rgba(0,0,0,.04)",
+                background: value === o.value ? "rgba(220,38,38,.06)" : "transparent",
+              }}
+              onMouseDown={() => { onSelect(o.value); setDraft(o.label); }}
+            >
+              <span dir={dir}>{o.label}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function CatalogueClient() {
+  const [products,      setProducts]      = useState<Product[]>([]);
+  const [total,         setTotal]         = useState(0);
+  const [page,          setPage]          = useState(0);
+  const [loading,       setLoading]       = useState(true);
+  const [error,         setError]         = useState<string | null>(null);
+  const [search,        setSearch]        = useState("");
+  const [searchDraft,   setSearchDraft]   = useState("");
+  const [category,      setCategory]      = useState("");
+  const [merchantId,    setMerchantId]    = useState("");
+  const [catOptions,    setCatOptions]    = useState<string[]>([]);
+  const [merchantOpts,  setMerchantOpts]  = useState<MerchantOption[]>([]);
+  const [activeProduct, setActiveProduct] = useState<Product | null>(null);
+
+  const abortRef   = useRef<AbortController | null>(null);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Load category options once
+  // Load category and merchant options once
   useEffect(() => {
     fetch("/api/catalogue?type=categories")
       .then(r => r.json())
       .then(d => setCatOptions((d.categories ?? []) as string[]))
       .catch(() => {});
+    fetch("/api/catalogue?type=merchants")
+      .then(r => r.json())
+      .then(d => setMerchantOpts((d.merchants ?? []) as MerchantOption[]))
+      .catch(() => {});
   }, []);
 
-  const fetchProducts = useCallback(async (s: string, cat: string, pg: number) => {
+  const fetchProducts = useCallback(async (s: string, cat: string, mid: string, pg: number) => {
     abortRef.current?.abort();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
@@ -85,6 +170,7 @@ export default function CatalogueClient() {
     const params = new URLSearchParams({ page: String(pg) });
     if (s)   params.set("search", s);
     if (cat) params.set("category", cat);
+    if (mid) params.set("merchant_id", mid);
 
     try {
       const resp = await fetch(`/api/catalogue?${params}`, { signal: ctrl.signal });
@@ -94,7 +180,7 @@ export default function CatalogueClient() {
       setProducts(json.products ?? []);
       setTotal(json.total ?? 0);
     } catch (e) {
-      if (ctrl.signal.aborted) return;
+      if ((e as Error).name === "AbortError") return;
       setError((e as Error).message);
     } finally {
       if (!ctrl.signal.aborted) setLoading(false);
@@ -102,8 +188,8 @@ export default function CatalogueClient() {
   }, []);
 
   useEffect(() => {
-    fetchProducts(search, category, page);
-  }, [search, category, page, fetchProducts]);
+    fetchProducts(search, category, merchantId, page);
+  }, [search, category, merchantId, page, fetchProducts]);
 
   const handleSearch = (val: string) => {
     setSearchDraft(val);
@@ -114,22 +200,16 @@ export default function CatalogueClient() {
     }, 350);
   };
 
-  const selectCategory = (val: string) => {
-    setCategory(val);
-    setPage(0);
-    setCatOpen(false);
-  };
-
-  const visibleCats = catOptions
-    .filter(o => !category || o.toLowerCase().includes(category.toLowerCase()))
-    .slice(0, 30);
+  const catOptionList = catOptions.map(c => ({ value: c, label: c }));
+  const merchantOptionList = merchantOpts.map(m => ({ value: m.id, label: m.name }));
+  const selectedMerchantLabel = merchantOpts.find(m => m.id === merchantId)?.name ?? "";
 
   return (
     <div>
       {/* Controls */}
       <div style={{ display: "flex", gap: 10, marginBottom: 24, flexWrap: "wrap", alignItems: "flex-end" }}>
         {/* Search */}
-        <div style={{ flex: "1 1 220px", minWidth: 180 }}>
+        <div style={{ flex: "1 1 180px", minWidth: 140 }}>
           <label style={{ display: "block", fontSize: 11.5, fontWeight: 500, color: "var(--ink-3)", marginBottom: 5, textTransform: "uppercase", letterSpacing: ".06em" }}>
             Search
           </label>
@@ -142,59 +222,22 @@ export default function CatalogueClient() {
           />
         </div>
 
-        {/* Category combobox */}
-        <div style={{ flex: "1 1 220px", minWidth: 180, position: "relative" }}>
-          <label style={{ display: "block", fontSize: 11.5, fontWeight: 500, color: "var(--ink-3)", marginBottom: 5, textTransform: "uppercase", letterSpacing: ".06em" }}>
-            Category
-          </label>
-          <input
-            type="text"
-            placeholder="All categories"
-            value={category}
-            dir="rtl"
-            onChange={e => { setCategory(e.target.value); setCatOpen(true); setPage(0); }}
-            onFocus={() => setCatOpen(true)}
-            onBlur={() => setTimeout(() => setCatOpen(false), 150)}
-            style={{ width: "100%", padding: "9px 14px", borderRadius: 10, border: "1px solid var(--g-line)", background: "rgba(255,255,255,.7)", color: "var(--ink)", fontSize: 13, boxSizing: "border-box" }}
-          />
-          {category && (
-            <button
-              onClick={() => { setCategory(""); setPage(0); }}
-              style={{ position: "absolute", right: 10, top: "calc(50% + 10px)", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "var(--ink-3)", fontSize: 16, lineHeight: 1, padding: 2 }}
-            >
-              ×
-            </button>
-          )}
-          {catOpen && visibleCats.length > 0 && (
-            <div style={{
-              position: "absolute", top: "100%", left: 0, right: 0, zIndex: 50, marginTop: 4,
-              background: "rgba(255,255,255,.98)", border: "1px solid var(--g-line)",
-              borderRadius: 12, boxShadow: "0 12px 32px rgba(40,60,110,.14)",
-              maxHeight: 240, overflowY: "auto",
-            }}>
-              <div
-                style={{ padding: "9px 14px", cursor: "pointer", fontSize: 13, color: "var(--ink-3)" }}
-                onMouseDown={() => selectCategory("")}
-              >
-                All categories
-              </div>
-              {visibleCats.map(o => (
-                <div
-                  key={o}
-                  style={{
-                    padding: "9px 14px", cursor: "pointer", fontSize: 13,
-                    borderTop: "1px solid rgba(0,0,0,.04)",
-                    background: category === o ? "rgba(220,38,38,.06)" : "transparent",
-                  }}
-                  onMouseDown={() => selectCategory(o)}
-                >
-                  <span dir="rtl">{o}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        <Combobox
+          label="Category"
+          placeholder="All categories"
+          value={category}
+          options={catOptionList}
+          onSelect={v => { setCategory(v); setPage(0); }}
+          dir="rtl"
+        />
 
+        <Combobox
+          label="Merchant"
+          placeholder="All merchants"
+          value={selectedMerchantLabel}
+          options={merchantOptionList}
+          onSelect={v => { setMerchantId(v); setPage(0); }}
+        />
       </div>
 
       {/* Error */}
@@ -202,7 +245,7 @@ export default function CatalogueClient() {
         <div style={{ textAlign: "center", padding: "48px 0" }}>
           <div style={{ fontSize: 13, color: "var(--red, #dc2626)", marginBottom: 12 }}>{error}</div>
           <button
-            onClick={() => fetchProducts(search, category, page)}
+            onClick={() => fetchProducts(search, category, merchantId, page)}
             style={{ padding: "8px 18px", borderRadius: 10, border: "1px solid var(--g-line)", background: "rgba(255,255,255,.7)", cursor: "pointer", fontSize: 13 }}
           >
             Retry
@@ -210,13 +253,101 @@ export default function CatalogueClient() {
         </div>
       )}
 
-      {/* Grid */}
+      {/* Responsive grid — 4+ cards on mobile, fills width on desktop */}
+      <style>{`
+        .cat-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+          gap: 16px;
+        }
+        .cat-card {
+          border-radius: 14px;
+          background: rgba(255,255,255,.6);
+          border: 1px solid rgba(255,255,255,.85);
+          box-shadow: 0 4px 16px rgba(40,60,110,.07);
+          padding: 14px;
+          display: flex;
+          flex-direction: column;
+          backdrop-filter: blur(8px);
+          -webkit-backdrop-filter: blur(8px);
+          cursor: pointer;
+          transition: box-shadow .15s, transform .15s;
+        }
+        .cat-card:hover {
+          box-shadow: 0 8px 28px rgba(40,60,110,.14);
+          transform: translateY(-2px);
+        }
+        .cat-card-img {
+          width: 100%;
+          aspect-ratio: 1;
+          object-fit: cover;
+          border-radius: 10px;
+          margin-bottom: 12px;
+          display: block;
+        }
+        .cat-card-img-ph {
+          width: 100%;
+          aspect-ratio: 1;
+          border-radius: 10px;
+          background: rgba(120,135,160,.1);
+          margin-bottom: 12px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 36px;
+          color: rgba(120,135,160,.3);
+        }
+        .cat-card-name {
+          font-weight: 500;
+          font-size: 13.5px;
+          color: var(--ink);
+          margin-bottom: 5px;
+          line-height: 1.35;
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+        .cat-card-cat {
+          font-size: 11.5px;
+          color: var(--ink-3);
+          margin-bottom: 6px;
+          direction: rtl;
+          text-align: right;
+        }
+        .cat-card-price {
+          margin-top: auto;
+          font-size: 14px;
+          font-weight: 600;
+          color: var(--ink);
+          font-variant-numeric: tabular-nums;
+        }
+        @keyframes pulse { 0%,100%{opacity:.6} 50%{opacity:1} }
+        @media (max-width: 640px) {
+          .cat-grid {
+            grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+            gap: 8px;
+          }
+          .cat-card {
+            padding: 8px;
+            border-radius: 10px;
+            box-shadow: none;
+          }
+          .cat-card:hover { transform: none; box-shadow: none; }
+          .cat-card-img { border-radius: 7px; margin-bottom: 7px; }
+          .cat-card-img-ph { border-radius: 7px; margin-bottom: 7px; font-size: 22px; }
+          .cat-card-name { font-size: 11px; margin-bottom: 3px; }
+          .cat-card-cat  { font-size: 10px; margin-bottom: 3px; }
+          .cat-card-price { font-size: 11.5px; }
+        }
+      `}</style>
+
       {!error && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 16 }}>
+        <div className="cat-grid">
           {loading
             ? Array.from({ length: 20 }).map((_, i) => (
-                <div key={i} style={{ borderRadius: 14, background: "rgba(255,255,255,.55)", border: "1px solid rgba(255,255,255,.8)", padding: 14, animation: "pulse 1.5s ease-in-out infinite" }}>
-                  <div style={{ aspectRatio: "1", borderRadius: 10, background: "rgba(120,135,160,.12)", marginBottom: 12 }} />
+                <div key={i} className="cat-card" style={{ animation: "pulse 1.5s ease-in-out infinite" }}>
+                  <div className="cat-card-img" style={{ background: "rgba(120,135,160,.12)" }} />
                   <div style={{ height: 13, borderRadius: 6, background: "rgba(120,135,160,.12)", marginBottom: 8 }} />
                   <div style={{ height: 11, borderRadius: 6, background: "rgba(120,135,160,.08)", width: "60%", marginBottom: 8 }} />
                   <div style={{ height: 13, borderRadius: 6, background: "rgba(120,135,160,.10)", width: "45%" }} />
@@ -229,41 +360,15 @@ export default function CatalogueClient() {
                 </div>
               )
             : products.map(p => (
-                <div
-                  key={p.id}
-                  onClick={() => setActiveProduct(p)}
-                  style={{
-                    borderRadius: 14,
-                    background: "rgba(255,255,255,.6)",
-                    border: "1px solid rgba(255,255,255,.85)",
-                    boxShadow: "0 4px 16px rgba(40,60,110,.07)",
-                    padding: 14,
-                    display: "flex",
-                    flexDirection: "column",
-                    backdropFilter: "blur(8px)",
-                    WebkitBackdropFilter: "blur(8px)",
-                    cursor: "pointer",
-                    transition: "box-shadow .15s, transform .15s",
-                  }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.boxShadow = "0 8px 28px rgba(40,60,110,.14)"; (e.currentTarget as HTMLDivElement).style.transform = "translateY(-2px)"; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.boxShadow = "0 4px 16px rgba(40,60,110,.07)"; (e.currentTarget as HTMLDivElement).style.transform = "none"; }}
-                >
+                <div key={p.id} className="cat-card" onClick={() => setActiveProduct(p)}>
                   {p.image_url
-                    ? <img src={p.image_url} alt={p.name} style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 10, marginBottom: 12, display: "block" }} />
-                    : <div style={{ width: "100%", aspectRatio: "1", borderRadius: 10, background: "rgba(120,135,160,.1)", marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 36, color: "rgba(120,135,160,.3)" }}>□</div>
+                    ? <img src={p.image_url} alt={p.name} className="cat-card-img" />
+                    : <div className="cat-card-img-ph">□</div>
                   }
-                  <div style={{ fontWeight: 500, fontSize: 13.5, color: "var(--ink)", marginBottom: 5, lineHeight: 1.35, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
-                    {p.name}
-                  </div>
-                  {p.category_mapped && (
-                    <div style={{ fontSize: 11.5, color: "var(--ink-3)", marginBottom: 6, direction: "rtl", textAlign: "right" }}>
-                      {p.category_mapped}
-                    </div>
-                  )}
-                  {p.price && (
-                    <div style={{ marginTop: "auto", fontSize: 14, fontWeight: 600, color: "var(--ink)", fontVariantNumeric: "tabular-nums" }}>
-                      SAR {Number(p.price).toLocaleString("en-US")}
-                    </div>
+                  <div className="cat-card-name">{p.name}</div>
+                  {p.category_mapped && <div className="cat-card-cat">{p.category_mapped}</div>}
+                  {p.price != null && (
+                    <div className="cat-card-price">SAR {Number(p.price).toLocaleString("en-US")}</div>
                   )}
                 </div>
               ))
@@ -272,8 +377,6 @@ export default function CatalogueClient() {
       )}
 
       <Pagination page={page} total={total} onChange={p => { setPage(p); window.scrollTo({ top: 0, behavior: "smooth" }); }} />
-
-      <style>{`@keyframes pulse{0%,100%{opacity:.6}50%{opacity:1}}`}</style>
 
       {activeProduct && (
         <CatalogueProductModal
