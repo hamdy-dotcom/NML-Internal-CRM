@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
+import CatalogueProductModal from "./CatalogueProductModal";
 
 const PAGE_SIZE = 100;
 
@@ -7,8 +8,10 @@ interface Product {
   id: string;
   name: string;
   image_url: string | null;
+  images: string[] | null;
   category_mapped: string | null;
   price: number | null;
+  description: string | null;
 }
 
 type CategoryOption = string;
@@ -56,7 +59,8 @@ export default function CatalogueClient() {
   const [error,      setError]      = useState<string | null>(null);
   const [search,     setSearch]     = useState("");
   const [category,   setCategory]   = useState("");
-  const [catOptions, setCatOptions] = useState<CategoryOption[]>([]);
+  const [catOptions,  setCatOptions]  = useState<CategoryOption[]>([]);
+  const [activeProduct, setActiveProduct] = useState<Product | null>(null);
   const [catOpen,    setCatOpen]    = useState(false);
   const [searchDraft, setSearchDraft] = useState("");
 
@@ -225,17 +229,25 @@ export default function CatalogueClient() {
                 </div>
               )
             : products.map(p => (
-                <div key={p.id} style={{
-                  borderRadius: 14,
-                  background: "rgba(255,255,255,.6)",
-                  border: "1px solid rgba(255,255,255,.85)",
-                  boxShadow: "0 4px 16px rgba(40,60,110,.07)",
-                  padding: 14,
-                  display: "flex",
-                  flexDirection: "column",
-                  backdropFilter: "blur(8px)",
-                  WebkitBackdropFilter: "blur(8px)",
-                }}>
+                <div
+                  key={p.id}
+                  onClick={() => setActiveProduct(p)}
+                  style={{
+                    borderRadius: 14,
+                    background: "rgba(255,255,255,.6)",
+                    border: "1px solid rgba(255,255,255,.85)",
+                    boxShadow: "0 4px 16px rgba(40,60,110,.07)",
+                    padding: 14,
+                    display: "flex",
+                    flexDirection: "column",
+                    backdropFilter: "blur(8px)",
+                    WebkitBackdropFilter: "blur(8px)",
+                    cursor: "pointer",
+                    transition: "box-shadow .15s, transform .15s",
+                  }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.boxShadow = "0 8px 28px rgba(40,60,110,.14)"; (e.currentTarget as HTMLDivElement).style.transform = "translateY(-2px)"; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.boxShadow = "0 4px 16px rgba(40,60,110,.07)"; (e.currentTarget as HTMLDivElement).style.transform = "none"; }}
+                >
                   {p.image_url
                     ? <img src={p.image_url} alt={p.name} style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 10, marginBottom: 12, display: "block" }} />
                     : <div style={{ width: "100%", aspectRatio: "1", borderRadius: 10, background: "rgba(120,135,160,.1)", marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 36, color: "rgba(120,135,160,.3)" }}>□</div>
@@ -262,6 +274,13 @@ export default function CatalogueClient() {
       <Pagination page={page} total={total} onChange={p => { setPage(p); window.scrollTo({ top: 0, behavior: "smooth" }); }} />
 
       <style>{`@keyframes pulse{0%,100%{opacity:.6}50%{opacity:1}}`}</style>
+
+      {activeProduct && (
+        <CatalogueProductModal
+          product={activeProduct}
+          onClose={() => setActiveProduct(null)}
+        />
+      )}
     </div>
   );
 }

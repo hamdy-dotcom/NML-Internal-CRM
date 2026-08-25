@@ -212,6 +212,7 @@ export interface Product {
   currency: string;
   stock: number | null;
   category: string | null;
+  category_mapped: string | null;
   brand: string | null;
   weight_g: number | null;
   description: string | null;

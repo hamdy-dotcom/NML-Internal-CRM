@@ -44,6 +44,7 @@ export async function importProducts(
     external_url:     p.external_url || null,
     url:              p.external_url || null,
     category:         p.category || null,
+    description:      p.description || null,
     brand:            p.brand || null,
     price:            p.price,
     nml_cost:         null,

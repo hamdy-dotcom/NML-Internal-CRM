@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let q = (adminClient.from("products") as any)
-    .select("id, name, image_url, category_mapped, price", { count: "exact" })
+    .select("id, name, image_url, images, category_mapped, price, description", { count: "exact" })
     .in("merchant_id", merchantIds);
 
   if (search)   q = q.ilike("name", `%${search}%`);

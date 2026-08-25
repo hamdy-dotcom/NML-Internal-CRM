@@ -215,7 +215,10 @@ export default function ProductDrawer({
               <div className="kv"><span className="k">Merchant</span>
                 <a href={`/merchants/${product.merchant_id}`} target="_blank" rel="noreferrer" style={{ color: "var(--blue)", textDecoration: "none", fontSize: 12.5 }}>{product.store_name}</a>
               </div>
-              <div className="kv"><span className="k">Category</span><span>{product.category || "—"}</span></div>
+              <div className="kv"><span className="k">Category (raw)</span><span dir="rtl">{product.category || "—"}</span></div>
+              {product.category_mapped && (
+                <div className="kv"><span className="k">Category</span><span dir="rtl">{product.category_mapped}</span></div>
+              )}
               <div className="kv"><span className="k">Brand</span><span>{product.brand || "—"}</span></div>
               <div className="kv"><span className="k">Stock</span><span className="num">{product.stock ?? "—"}</span></div>
               <div className="kv"><span className="k">Weight</span><span>{product.weight_g != null ? `${product.weight_g} g` : "—"}</span></div>
