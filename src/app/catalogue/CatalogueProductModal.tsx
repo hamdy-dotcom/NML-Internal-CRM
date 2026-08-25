@@ -19,182 +19,252 @@ interface Props {
 export default function CatalogueProductModal({ product, onClose }: Props) {
   const allImages = [
     ...(product.image_url ? [product.image_url] : []),
-    ...(product.images ?? []),
+    ...(product.images ?? []).filter(img => img !== product.image_url),
   ].filter(Boolean) as string[];
 
   const [imgIdx, setImgIdx] = useState(0);
   const panelRef = useRef<HTMLDivElement>(null);
 
-  // Keyboard: Escape closes, ← → navigate images
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") { onClose(); return; }
-      if (e.key === "ArrowLeft"  && imgIdx > 0)                  setImgIdx(i => i - 1);
+      if (e.key === "ArrowLeft"  && imgIdx > 0)                    setImgIdx(i => i - 1);
       if (e.key === "ArrowRight" && imgIdx < allImages.length - 1) setImgIdx(i => i + 1);
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [imgIdx, allImages.length, onClose]);
 
-  // Lock body scroll while open
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = prev; };
   }, []);
 
+  const hasPrev = imgIdx > 0;
+  const hasNext = imgIdx < allImages.length - 1;
+
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      style={{
-        position: "fixed", inset: 0, zIndex: 1000,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        padding: "16px",
-        background: "rgba(20,28,45,.55)",
-        backdropFilter: "blur(12px)",
-        WebkitBackdropFilter: "blur(12px)",
-      }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
-    >
+    <>
+      <style>{`
+        .cat-modal-panel {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          grid-template-rows: 1fr;
+          width: 100%;
+          max-width: min(900px, 90vw);
+          max-height: 85vh;
+          border-radius: 20px;
+          overflow: hidden;
+          background: rgba(255,255,255,.92);
+          border: 1px solid rgba(255,255,255,.95);
+          box-shadow: 0 40px 100px rgba(20,28,45,.35), 0 1px 0 rgba(255,255,255,1) inset;
+          backdrop-filter: blur(32px);
+          -webkit-backdrop-filter: blur(32px);
+        }
+        .cat-modal-left {
+          background: #f4f5f8;
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+        }
+        .cat-modal-right {
+          overflow-y: auto;
+          padding: 36px 32px 36px;
+          display: flex;
+          flex-direction: column;
+          gap: 0;
+        }
+        @media (max-width: 640px) {
+          .cat-modal-panel {
+            grid-template-columns: 1fr;
+            grid-template-rows: auto 1fr;
+            max-width: 95vw;
+            max-height: 92vh;
+          }
+          .cat-modal-left {
+            max-height: 52vw;
+            min-height: 200px;
+          }
+          .cat-modal-right {
+            padding: 20px 18px 24px;
+          }
+        }
+      `}</style>
+
+      {/* Backdrop */}
       <div
-        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
         style={{
-          width: "100%",
-          maxWidth: 640,
-          maxHeight: "92vh",
-          overflowY: "auto",
-          borderRadius: 20,
-          background: "rgba(255,255,255,.88)",
-          border: "1px solid rgba(255,255,255,.9)",
-          boxShadow: "0 32px 80px rgba(20,28,45,.28), 0 1px 0 rgba(255,255,255,1) inset",
-          backdropFilter: "blur(32px)",
-          WebkitBackdropFilter: "blur(32px)",
+          position: "fixed", inset: 0, zIndex: 1000,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          padding: "24px 16px",
+          background: "rgba(18,24,40,.6)",
+          backdropFilter: "blur(14px)",
+          WebkitBackdropFilter: "blur(14px)",
         }}
+        onClick={e => { if (e.target === e.currentTarget) onClose(); }}
       >
-        {/* Close button */}
-        <button
-          onClick={onClose}
-          aria-label="Close"
-          style={{
-            position: "sticky", top: 12, float: "right", marginRight: 12,
-            width: 32, height: 32, borderRadius: "50%",
-            background: "rgba(255,255,255,.8)", border: "1px solid rgba(0,0,0,.08)",
-            cursor: "pointer", fontSize: 18, lineHeight: "30px", textAlign: "center",
-            color: "var(--ink-3)", zIndex: 10,
-          }}
-        >
-          ×
-        </button>
+        <div ref={panelRef} className="cat-modal-panel">
 
-        <div style={{ padding: "24px 24px 32px", clearfix: "both" } as React.CSSProperties}>
-
-          {/* Image gallery */}
-          {allImages.length > 0 && (
-            <div style={{ marginBottom: 20 }}>
-              {/* Main image with arrows */}
-              <div style={{ position: "relative", borderRadius: 14, overflow: "hidden", background: "var(--g-panel, rgba(120,135,160,.08))", marginBottom: 10 }}>
+          {/* LEFT — image gallery */}
+          <div className="cat-modal-left">
+            {/* Main image */}
+            <div style={{ flex: 1, position: "relative", minHeight: 0 }}>
+              {allImages.length > 0 ? (
                 <img
+                  key={allImages[imgIdx]}
                   src={allImages[imgIdx]}
                   alt={product.name}
-                  style={{ width: "100%", maxHeight: 360, objectFit: "contain", display: "block" }}
+                  style={{ width: "100%", height: "100%", objectFit: "contain", display: "block", padding: 8, boxSizing: "border-box" }}
                 />
-                {allImages.length > 1 && (
-                  <>
-                    <button
-                      onClick={() => setImgIdx(i => Math.max(0, i - 1))}
-                      disabled={imgIdx === 0}
-                      aria-label="Previous image"
-                      style={{
-                        position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)",
-                        width: 36, height: 36, borderRadius: "50%",
-                        background: "rgba(255,255,255,.85)", border: "1px solid rgba(0,0,0,.08)",
-                        cursor: "pointer", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center",
-                        opacity: imgIdx === 0 ? 0.3 : 1, transition: "opacity .15s",
-                      }}
-                    >
-                      ‹
-                    </button>
-                    <button
-                      onClick={() => setImgIdx(i => Math.min(allImages.length - 1, i + 1))}
-                      disabled={imgIdx === allImages.length - 1}
-                      aria-label="Next image"
-                      style={{
-                        position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
-                        width: 36, height: 36, borderRadius: "50%",
-                        background: "rgba(255,255,255,.85)", border: "1px solid rgba(0,0,0,.08)",
-                        cursor: "pointer", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center",
-                        opacity: imgIdx === allImages.length - 1 ? 0.3 : 1, transition: "opacity .15s",
-                      }}
-                    >
-                      ›
-                    </button>
-                  </>
-                )}
-              </div>
-              {/* Thumbnails */}
-              {allImages.length > 1 && (
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                  {allImages.map((img, i) => (
-                    <button
-                      key={i}
-                      onClick={() => setImgIdx(i)}
-                      style={{
-                        width: 52, height: 52, padding: 0, border: "none", borderRadius: 8, cursor: "pointer",
-                        outline: i === imgIdx ? "2px solid var(--nml-red, #dc2626)" : "2px solid transparent",
-                        outlineOffset: 1, overflow: "hidden", background: "none",
-                        opacity: i === imgIdx ? 1 : 0.55, transition: "opacity .15s, outline-color .15s",
-                      }}
-                    >
-                      <img src={img} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-                    </button>
-                  ))}
+              ) : (
+                <div style={{ width: "100%", height: "100%", minHeight: 260, display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(120,135,160,.3)", fontSize: 64 }}>
+                  □
                 </div>
               )}
+
+              {/* Nav arrows */}
+              {allImages.length > 1 && (
+                <>
+                  <button
+                    onClick={() => setImgIdx(i => Math.max(0, i - 1))}
+                    disabled={!hasPrev}
+                    aria-label="Previous"
+                    style={{
+                      position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)",
+                      width: 38, height: 38, borderRadius: "50%",
+                      background: "rgba(255,255,255,.88)", border: "1px solid rgba(0,0,0,.08)",
+                      cursor: hasPrev ? "pointer" : "default",
+                      fontSize: 20, display: "flex", alignItems: "center", justifyContent: "center",
+                      opacity: hasPrev ? 1 : 0.25, transition: "opacity .15s",
+                      color: "#1c2536",
+                    }}
+                  >
+                    ‹
+                  </button>
+                  <button
+                    onClick={() => setImgIdx(i => Math.min(allImages.length - 1, i + 1))}
+                    disabled={!hasNext}
+                    aria-label="Next"
+                    style={{
+                      position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
+                      width: 38, height: 38, borderRadius: "50%",
+                      background: "rgba(255,255,255,.88)", border: "1px solid rgba(0,0,0,.08)",
+                      cursor: hasNext ? "pointer" : "default",
+                      fontSize: 20, display: "flex", alignItems: "center", justifyContent: "center",
+                      opacity: hasNext ? 1 : 0.25, transition: "opacity .15s",
+                      color: "#1c2536",
+                    }}
+                  >
+                    ›
+                  </button>
+                </>
+              )}
             </div>
-          )}
 
-          {/* Name */}
-          <h2 style={{
-            margin: "0 0 8px", fontSize: 18, fontWeight: 600,
-            color: "var(--ink, #1c2536)", lineHeight: 1.35,
-            direction: "rtl", textAlign: "right",
-          }}>
-            {product.name}
-          </h2>
-
-          {/* Category */}
-          {product.category_mapped && (
-            <div style={{ fontSize: 12.5, color: "var(--ink-3, #8896aa)", marginBottom: 14, direction: "rtl", textAlign: "right" }}>
-              {product.category_mapped}
-            </div>
-          )}
-
-          {/* Price */}
-          {product.price && (
-            <div style={{ fontSize: 22, fontWeight: 700, color: "var(--ink, #1c2536)", marginBottom: 16, fontVariantNumeric: "tabular-nums" }}>
-              SAR {Number(product.price).toLocaleString("en-US")}
-            </div>
-          )}
-
-          {/* Description */}
-          {product.description && (
-            <div style={{ borderTop: "1px solid rgba(0,0,0,.06)", paddingTop: 16 }}>
-              <div style={{ fontSize: 11.5, fontWeight: 500, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 8 }}>
-                Description
-              </div>
-              <p style={{
-                margin: 0, fontSize: 13.5, color: "var(--ink-2, #3d4e6a)",
-                lineHeight: 1.75, whiteSpace: "pre-wrap",
-                direction: "rtl", textAlign: "right",
+            {/* Thumbnails */}
+            {allImages.length > 1 && (
+              <div style={{
+                display: "flex", gap: 6, padding: "10px 12px 12px",
+                overflowX: "auto", flexShrink: 0,
+                scrollbarWidth: "none",
               }}>
-                {product.description}
-              </p>
+                {allImages.map((img, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setImgIdx(i)}
+                    style={{
+                      width: 52, height: 52, flexShrink: 0, padding: 0, border: "none",
+                      borderRadius: 8, cursor: "pointer", overflow: "hidden",
+                      outline: i === imgIdx ? "2.5px solid #dc2626" : "2.5px solid transparent",
+                      outlineOffset: 1,
+                      opacity: i === imgIdx ? 1 : 0.5,
+                      transition: "opacity .15s, outline-color .15s",
+                      background: "#e8eaf0",
+                    }}
+                  >
+                    <img src={img} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* RIGHT — details */}
+          <div className="cat-modal-right">
+            {/* Close button */}
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 20, flexShrink: 0 }}>
+              <button
+                onClick={onClose}
+                aria-label="Close"
+                style={{
+                  width: 34, height: 34, borderRadius: "50%",
+                  background: "rgba(0,0,0,.06)", border: "none",
+                  cursor: "pointer", fontSize: 20, lineHeight: "33px", textAlign: "center",
+                  color: "#8896aa",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}
+              >
+                ×
+              </button>
             </div>
-          )}
+
+            {/* Category pill */}
+            {product.category_mapped && (
+              <div style={{ marginBottom: 12, flexShrink: 0 }}>
+                <span style={{
+                  display: "inline-block", padding: "4px 12px",
+                  borderRadius: 20, background: "rgba(220,38,38,.08)",
+                  color: "#b91c1c", fontSize: 12, fontWeight: 500,
+                  direction: "rtl",
+                }}>
+                  {product.category_mapped}
+                </span>
+              </div>
+            )}
+
+            {/* Product name */}
+            <h2 style={{
+              margin: "0 0 20px", fontSize: 22, fontWeight: 700,
+              color: "#1c2536", lineHeight: 1.4,
+              direction: "rtl", textAlign: "right", flexShrink: 0,
+            }}>
+              {product.name}
+            </h2>
+
+            {/* Price */}
+            {product.price != null && (
+              <div style={{ marginBottom: 24, flexShrink: 0 }}>
+                <div style={{ fontSize: 11.5, fontWeight: 500, color: "#8896aa", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 4 }}>
+                  Price
+                </div>
+                <div style={{ fontSize: 28, fontWeight: 700, color: "#1c2536", fontVariantNumeric: "tabular-nums", letterSpacing: "-.01em" }}>
+                  SAR {Number(product.price).toLocaleString("en-US")}
+                </div>
+              </div>
+            )}
+
+            {/* Description */}
+            {product.description && (
+              <div style={{ borderTop: "1px solid rgba(0,0,0,.07)", paddingTop: 20, flexShrink: 0 }}>
+                <div style={{ fontSize: 11.5, fontWeight: 500, color: "#8896aa", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 12 }}>
+                  Description
+                </div>
+                <p style={{
+                  margin: 0, fontSize: 14, color: "#3d4e6a",
+                  lineHeight: 1.8, whiteSpace: "pre-wrap",
+                  direction: "rtl", textAlign: "right",
+                }}>
+                  {product.description}
+                </p>
+              </div>
+            )}
+          </div>
 
         </div>
       </div>
-    </div>
+    </>
   );
 }
