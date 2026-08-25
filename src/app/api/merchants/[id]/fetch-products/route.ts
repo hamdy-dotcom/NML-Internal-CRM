@@ -32,6 +32,9 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     return NextResponse.json({ error: "Merchant has no store_url" }, { status: 400 });
   }
 
+  const body = await req.json().catch(() => ({}));
+  const autoImport = body?.auto_import === true;
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const adminDb = adminClient as any;
 
@@ -55,7 +58,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
 
   // Create a new job record (worker polls and picks it up)
   const { data: job, error: jErr } = await adminDb.from("salla_fetch_jobs")
-    .insert({ merchant_id: merchantId, store_url: merchant.store_url })
+    .insert({ merchant_id: merchantId, store_url: merchant.store_url, auto_import: autoImport })
     .select("id")
     .single();
 

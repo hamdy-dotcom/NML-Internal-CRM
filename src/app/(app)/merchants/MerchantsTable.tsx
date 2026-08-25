@@ -234,7 +234,7 @@ export default function MerchantsTable({ rows, view }: Props) {
                   style={{ cursor: 'pointer' }}
                   onClick={e => {
                     if ((e.target as HTMLElement).tagName === 'INPUT') return;
-                    router.push(`/merchants/${row.id}`);
+                    window.open(`/merchants/${row.id}`, "_blank");
                   }}
                 >
                   <td onClick={e => e.stopPropagation()}>

@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import type {
   Merchant, Activity, Task, FormLink, FormTemplate, FormSubmission,
-  MerchantOnboarding, MerchantOnboardingStep, Product, AuditLog, Attachment, Profile,
+  MerchantOnboarding, MerchantOnboardingStep, AuditLog, Attachment, Profile,
   MerchantStage, MerchantPriority,
 } from '@/lib/database.types';
 import StageBadge from '@/components/ui/StageBadge';
@@ -48,7 +48,7 @@ interface Props {
   formSubmissions: FormSubmission[];
   onboarding: MerchantOnboarding | null;
   onboardingSteps: MerchantOnboardingStep[];
-  products: Product[];
+  productCount: number;
   auditLogs: AuditLog[];
   attachments: Attachment[];
   currentUserId: string | null;
@@ -64,7 +64,7 @@ export default function MerchantDetailClient({
   formSubmissions,
   onboarding,
   onboardingSteps,
-  products,
+  productCount,
   auditLogs,
   attachments,
   currentUserId,
@@ -197,7 +197,7 @@ export default function MerchantDetailClient({
               Log activity
             </button>
             <button className="pill outline" style={{ fontSize: 12.5 }} onClick={() => setProductsOpen(true)}>
-              📦 Products ({products.length})
+              📦 Products ({productCount})
             </button>
             {/* Overflow */}
             <div style={{ position: 'relative' }}>
@@ -241,7 +241,7 @@ export default function MerchantDetailClient({
       {/* ── Tabs ───────────────────────────────────────────────────────── */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 14, flexWrap: 'wrap' }}>
         {TABS.map(t => {
-          const badge = t.key === 'products' ? products.length
+          const badge = t.key === 'products' ? productCount
             : t.key === 'tasks' ? tasks.filter(tk => tk.status === 'open').length
             : t.key === 'files' ? attachments.length
             : null;
@@ -281,7 +281,7 @@ export default function MerchantDetailClient({
             />
           )}
           {tab === 'products' && (
-            <ProductsTab merchant={merchant} products={products} currentProfile={currentProfile} />
+            <ProductsTab merchant={merchant} currentProfile={currentProfile} />
           )}
           {tab === 'form' && (
             <FormTab
@@ -359,7 +359,7 @@ export default function MerchantDetailClient({
             <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--g-line)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
               <div>
                 <div style={{ fontSize: 15, fontWeight: 500, color: 'var(--ink)' }}>Products</div>
-                <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 2 }}>{merchant.store_name} · {products.length} products</div>
+                <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 2 }}>{merchant.store_name} · {productCount} products</div>
               </div>
               <button
                 onClick={() => setProductsOpen(false)}
@@ -369,51 +369,18 @@ export default function MerchantDetailClient({
               </button>
             </div>
 
-            {/* Product list */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: '12px 20px' }}>
-              {products.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--ink-4)', fontSize: 13 }}>
-                  No products yet
-                </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {products.map(p => (
-                    <div
-                      key={p.id}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 12,
-                        padding: '10px 12px', borderRadius: 12,
-                        background: 'rgba(255,255,255,.8)',
-                        border: '1px solid var(--g-line)',
-                      }}
-                    >
-                      {p.image_url ? (
-                        <img src={p.image_url} alt="" width={44} height={44} style={{ borderRadius: 8, objectFit: 'cover', flexShrink: 0 }} />
-                      ) : (
-                        <div style={{ width: 44, height: 44, borderRadius: 8, background: 'var(--g-panel)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>📦</div>
-                      )}
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
-                        <div style={{ fontSize: 11.5, color: 'var(--ink-3)', marginTop: 1 }}>
-                          {p.sku ? `SKU: ${p.sku}` : ''}
-                          {p.sku && p.category ? ' · ' : ''}
-                          {p.category || ''}
-                        </div>
-                      </div>
-                      <div style={{ textAlign: 'end', flexShrink: 0 }}>
-                        {p.price != null && (
-                          <div style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--ink)', fontFamily: 'JetBrains Mono, monospace' }}>
-                            SAR {Number(p.price).toLocaleString()}
-                          </div>
-                        )}
-                        <span style={{ fontSize: 11, padding: '2px 7px', borderRadius: 99, background: 'var(--blue-bg)', color: 'var(--blue)', fontWeight: 500 }}>
-                          {p.status}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+            {/* Product list — navigate to Products tab for full paginated view */}
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 20px', gap: 12 }}>
+              <div style={{ fontSize: 32 }}>📦</div>
+              <div style={{ fontSize: 20, fontWeight: 600, color: 'var(--ink)' }}>{productCount.toLocaleString('en-US')}</div>
+              <div style={{ fontSize: 13, color: 'var(--ink-3)' }}>{productCount === 1 ? 'product' : 'products'} in CRM</div>
+              <button
+                className="pill dark"
+                style={{ fontSize: 13, marginTop: 8 }}
+                onClick={() => { setProductsOpen(false); setTab('products'); }}
+              >
+                Browse in Products tab
+              </button>
             </div>
           </div>
         </div>

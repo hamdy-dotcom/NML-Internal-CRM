@@ -186,7 +186,7 @@ export default function OnboardingBoard({ currentUserId: _currentUserId }: Props
                   <div key={card.merchant_id} className="glass-card" style={{ padding: "14px 16px" }}>
                     <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 8, gap: 8 }}>
                       <div style={{ flex: 1 }}>
-                        <a href={`/merchants/${card.merchant_id}`} style={{ fontSize: 13, fontWeight: 500, color: "var(--ink)", textDecoration: "none", display: "block", marginBottom: 2 }}>
+                        <a href={`/merchants/${card.merchant_id}`} target="_blank" rel="noreferrer" style={{ fontSize: 13, fontWeight: 500, color: "var(--ink)", textDecoration: "none", display: "block", marginBottom: 2 }}>
                           {card.store_name}
                         </a>
                         {card.account_manager_name && (

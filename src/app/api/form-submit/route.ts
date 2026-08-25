@@ -104,19 +104,19 @@ async function handleSubmit(req: NextRequest) {
     .single<LinkRow>();
 
   if (linkError || !link) {
-    return Response.json({ error: "Invalid token" }, { status: 400 });
+    return Response.json({ error: "الرابط غير صالح" }, { status: 400 });
   }
 
   if (new Date(link.expires_at) < new Date()) {
-    return Response.json({ error: "This link has expired" }, { status: 400 });
+    return Response.json({ error: "انتهت صلاحية هذا الرابط" }, { status: 400 });
   }
 
   if (link.status === "revoked") {
-    return Response.json({ error: "This link has been deactivated" }, { status: 400 });
+    return Response.json({ error: "تم إلغاء تفعيل هذا الرابط" }, { status: 400 });
   }
 
   if (link.status === "submitted") {
-    return Response.json({ error: "This form has already been submitted" }, { status: 400 });
+    return Response.json({ error: "تم إرسال هذا النموذج مسبقاً، شكراً لك!" }, { status: 400 });
   }
 
   // ── Validate required fields from schema ────────────────────────────────
@@ -148,7 +148,7 @@ async function handleSubmit(req: NextRequest) {
 
   if (missingFields.length > 0) {
     return Response.json(
-      { error: `Missing required fields: ${missingFields.join(", ")}` },
+      { error: `يرجى تعبئة الحقول المطلوبة: ${missingFields.join("، ")}` },
       { status: 400 },
     );
   }
@@ -183,6 +183,8 @@ async function handleSubmit(req: NextRequest) {
   }
 
   // ── Update merchant fields ─────────────────────────────────────────────
+  // Non-fatal: form_submission and form_links are already committed.
+  // If this fails, the submission is still captured; we log for manual recovery.
   const merchantUpdate: Record<string, unknown> = {};
   for (const field of ALLOWED_MERCHANT_FIELDS) {
     if (data[field] !== undefined && data[field] !== "") {
@@ -198,7 +200,9 @@ async function handleSubmit(req: NextRequest) {
     .eq("id", link.merchant_id);
 
   if (merchantError) {
-    return Response.json({ error: merchantError.message }, { status: 500 });
+    console.error(
+      `[form-submit] merchant stage update failed for merchant_id=${link.merchant_id} form_link_id=${link.id}: ${merchantError.message}`,
+    );
   }
 
   return Response.json({ success: true });

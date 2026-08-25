@@ -181,7 +181,7 @@ async function SpecialistDashboard({ userId, dateStart: _dateStart }: { userId: 
                     <td><span style={{ color: daysOverdue > 0 ? "var(--red)" : "var(--ink-2)" }}>{daysOverdue > 0 ? `${daysOverdue}d` : "Today"}</span></td>
                     <td><span className="badge badge-ghost">{STAGE_LABELS[m.stage]}</span></td>
                     <td>
-                      <Link href={`/merchants/${m.id}`} className="pill outline" style={{ padding: "3px 10px", fontSize: 12 }}>Open</Link>
+                      <Link href={`/merchants/${m.id}`} target="_blank" rel="noreferrer" className="pill outline" style={{ padding: "3px 10px", fontSize: 12 }}>Open</Link>
                     </td>
                   </tr>
                 );
@@ -205,7 +205,7 @@ async function ManagerDashboard({ userId: _userId, dateStart: _dateStart }: { us
     { count: unassigned },
     rawStale,
   ] = await Promise.all([
-    supabase.from("merchants").select("stage").not("stage", "in", "(lost,not_interested)"),
+    supabase.from("merchants").select("stage").not("stage", "in", "(lost,not_interested)").limit(10000),
     supabase.from("v_specialist_performance").select("*"),
     supabase.from("merchants").select("*", { count: "exact", head: true }).eq("stage", "new"),
     supabase.from("merchants").select("id, store_name, stage, last_activity_at")
@@ -293,7 +293,7 @@ async function ManagerDashboard({ userId: _userId, dateStart: _dateStart }: { us
                   <td><span className="badge badge-ghost">{STAGE_LABELS[m.stage]}</span></td>
                   <td><span className="sub">{m.last_activity_at ? fmtDate(m.last_activity_at) : "Never"}</span></td>
                   <td>
-                    <Link href={`/merchants/${m.id}`} className="pill outline" style={{ padding: "3px 10px", fontSize: 12 }}>Open</Link>
+                    <Link href={`/merchants/${m.id}`} target="_blank" rel="noreferrer" className="pill outline" style={{ padding: "3px 10px", fontSize: 12 }}>Open</Link>
                   </td>
                 </tr>
               ))}
@@ -367,7 +367,7 @@ async function AccountManagerDashboard({ userId, dateStart: _dateStart }: { user
           <div style={{ fontSize: 12, fontWeight: 500, color: "var(--ink-2)", marginBottom: 10 }}>Merchants in onboarding</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(220px,1fr))", gap: 12, marginBottom: 20 }}>
             {onboardingMerchants.map((m) => (
-              <Link key={m.id} href={`/merchants/${m.id}`} style={{ textDecoration: "none" }}>
+              <Link key={m.id} href={`/merchants/${m.id}`} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>
                 <div className="glass-card" style={{ padding: "14px 16px" }}>
                   <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 8 }}>
                     <span style={{ fontSize: 13, fontWeight: 500, color: "var(--ink)" }}>{m.store_name}</span>
@@ -405,7 +405,7 @@ async function AccountManagerDashboard({ userId, dateStart: _dateStart }: { user
               {overdueSteps.map((s) => (
                 <tr key={s.id} className="warn">
                   <td>
-                    <Link href={`/merchants/${s.merchant_id}`} style={{ color: "var(--blue)", textDecoration: "none", fontWeight: 500 }}>
+                    <Link href={`/merchants/${s.merchant_id}`} target="_blank" rel="noreferrer" style={{ color: "var(--blue)", textDecoration: "none", fontWeight: 500 }}>
                       {onboardingMerchants.find((m) => m.id === s.merchant_id)?.store_name ?? "—"}
                     </Link>
                   </td>
@@ -434,7 +434,7 @@ async function CatalogOpsDashboard({ dateStart: _dateStart }: { dateStart: strin
     supabase.from("products").select("*", { count: "exact", head: true }).eq("status", "ready_for_shelf"),
     supabase.from("products").select("*", { count: "exact", head: true }).eq("status", "in_review"),
     supabase.from("products").select("*", { count: "exact", head: true }).eq("status", "shelved").gte("shelved_at", weekStart),
-    supabase.from("products").select("merchant_id").eq("status", "ready_for_shelf").limit(5000),
+    supabase.from("products").select("merchant_id").eq("status", "ready_for_shelf").limit(100000),
   ]);
 
   // Count by merchant, then join store names
@@ -478,7 +478,7 @@ async function CatalogOpsDashboard({ dateStart: _dateStart }: { dateStart: strin
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {sorted.map((m) => (
               <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <Link href={`/merchants/${m.id}`} style={{ width: 180, fontSize: 12.5, color: "var(--blue)", textDecoration: "none", flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                <Link href={`/merchants/${m.id}`} target="_blank" rel="noreferrer" style={{ width: 180, fontSize: 12.5, color: "var(--blue)", textDecoration: "none", flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {m.name}
                 </Link>
                 <div style={{ flex: 1, height: 6, borderRadius: 999, background: "rgba(120,135,160,.15)", overflow: "hidden" }}>

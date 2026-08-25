@@ -7,6 +7,7 @@ import type { MerchantOnboardingStep, StepStatus } from "@/lib/database.types";
 import { STEP_STATUS_LABELS, fmtDate, isOverdue } from "@/lib/utils";
 import EmptyState from "@/components/ui/EmptyState";
 import SkeletonRows from "@/components/ui/SkeletonRows";
+import Pagination, { PAGE_SIZE } from "@/components/ui/Pagination";
 import { updateStepStatus } from "./actions";
 
 interface StepRow extends MerchantOnboardingStep {
@@ -33,6 +34,8 @@ export default function StepQueue({ currentUserId }: Props) {
   const [overdueOnly, setOverdueOnly] = useState(false);
   const [search,      setSearch]      = useState("");
   const [updatingId,  setUpdatingId]  = useState<string | null>(null);
+  const [page,        setPage]        = useState(0);
+  const [total,       setTotal]       = useState(0);
 
   const fetchSteps = useCallback(async () => {
     setLoading(true);
@@ -40,11 +43,14 @@ export default function StepQueue({ currentUserId }: Props) {
       // Fetch open steps
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const stepsQ = supabase.from("merchant_onboarding_steps") as any;
-      let q = stepsQ.select("id, title, status, due_at, created_at, merchant_id, owner_id, blocked_reason, onboarding_id, order_index, description, is_required, completed_at, completed_by, notes")
+      let q = stepsQ.select("id, title, status, due_at, created_at, merchant_id, owner_id, blocked_reason, onboarding_id, order_index, description, is_required, completed_at, completed_by, notes", { count: "exact" })
         .in("status", OPEN_STATUSES)
         .order("due_at", { ascending: true, nullsFirst: false });
       if (ownerFilter === "me") q = q.eq("owner_id", currentUserId);
-      const { data: rawSteps, error: se } = await q;
+      const from = page * PAGE_SIZE;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: rawSteps, error: se, count } = await (q.range(from, from + PAGE_SIZE - 1) as any);
+      setTotal(count ?? 0);
       if (se) { toast.error((se as { message: string }).message); return; }
 
       const steps = (rawSteps ?? []) as MerchantOnboardingStep[];
@@ -89,9 +95,10 @@ export default function StepQueue({ currentUserId }: Props) {
       setLoading(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ownerFilter, overdueOnly, search]);
+  }, [ownerFilter, overdueOnly, search, page]);
 
   useEffect(() => { fetchSteps(); }, [fetchSteps]);
+  useEffect(() => { setPage(0); }, [ownerFilter, overdueOnly, search]);
 
   const handleStatusChange = async (stepId: string, status: StepStatus) => {
     setUpdatingId(stepId);
@@ -180,7 +187,7 @@ export default function StepQueue({ currentUserId }: Props) {
               return (
                 <tr key={s.id} className={overdue ? "warn" : undefined}>
                   <td>
-                    <a href={`/merchants/${s.merchant_id}`} style={{ color: "var(--blue)", textDecoration: "none", fontWeight: 500 }}>
+                    <a href={`/merchants/${s.merchant_id}`} target="_blank" rel="noreferrer" style={{ color: "var(--blue)", textDecoration: "none", fontWeight: 500 }}>
                       {s.merchant_name ?? "—"}
                     </a>
                   </td>
@@ -237,6 +244,7 @@ export default function StepQueue({ currentUserId }: Props) {
           </tbody>
         </table>
       </div>
+      <Pagination page={page} total={total} onChange={setPage} />
     </div>
   );
 }

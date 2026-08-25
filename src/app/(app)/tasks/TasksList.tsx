@@ -6,6 +6,7 @@ import type { Task, MerchantPriority, TaskStatus } from "@/lib/database.types";
 import { PRIORITY_LABELS, fmtDate, isOverdue } from "@/lib/utils";
 import EmptyState from "@/components/ui/EmptyState";
 import SkeletonRows from "@/components/ui/SkeletonRows";
+import Pagination, { PAGE_SIZE } from "@/components/ui/Pagination";
 import Modal from "@/components/ui/Modal";
 import UserPicker from "@/components/ui/UserPicker";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
@@ -58,6 +59,8 @@ export default function TasksList({ currentUserId, isManager }: Props) {
   const [tab,         setTab]         = useState<Tab>("my_open");
   const [tasks,       setTasks]       = useState<TaskRow[]>([]);
   const [loading,     setLoading]     = useState(true);
+  const [page,        setPage]        = useState(0);
+  const [total,       setTotal]       = useState(0);
   const [newTaskOpen, setNewTaskOpen] = useState(false);
   const [form,        setForm]        = useState<NewTask>(DEFAULT_TASK);
   const [submitting,  setSubmitting]  = useState(false);
@@ -81,6 +84,7 @@ export default function TasksList({ currentUserId, isManager }: Props) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let q = (supabase.from("tasks") as any).select(
         "id, title, description, status, priority, due_at, completed_at, assignee_id, merchant_id, created_by, created_at, updated_at",
+        { count: "exact" },
       );
 
       if (tab === "my_open") {
@@ -107,10 +111,13 @@ export default function TasksList({ currentUserId, isManager }: Props) {
         else { setTasks([]); setLoading(false); return; }
       }
 
-      q = q.order("due_at", { ascending: true, nullsFirst: false }).limit(300);
-      const { data: rawTasks, error } = await q;
+      const from = page * PAGE_SIZE;
+      q = q.order("due_at", { ascending: true, nullsFirst: false }).range(from, from + PAGE_SIZE - 1);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: rawTasks, error, count } = await (q as any);
       if (error) { toast.error((error as { message: string }).message); return; }
 
+      setTotal(count ?? 0);
       const taskList = (rawTasks ?? []) as Task[];
       if (!taskList.length) { setTasks([]); return; }
 
@@ -149,9 +156,13 @@ export default function TasksList({ currentUserId, isManager }: Props) {
       setLoading(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, filterAssignee, filterPriority, filterDueFrom, filterDueTo, filterMerchant]);
+  }, [tab, filterAssignee, filterPriority, filterDueFrom, filterDueTo, filterMerchant, page]);
 
   useEffect(() => { fetchTasks(); }, [fetchTasks]);
+
+  // Reset to page 0 when filters or tab change
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { setPage(0); }, [tab, filterAssignee, filterPriority, filterDueFrom, filterDueTo, filterMerchant]);
 
   const handleComplete = async (taskId: string) => {
     setCompleting(taskId);
@@ -312,7 +323,7 @@ export default function TasksList({ currentUserId, isManager }: Props) {
                   </td>
                   <td>
                     {t.merchant_id && t.merchant_name ? (
-                      <a href={`/merchants/${t.merchant_id}`} style={{ color: "var(--blue)", textDecoration: "none", fontSize: 12.5 }}>
+                      <a href={`/merchants/${t.merchant_id}`} target="_blank" rel="noreferrer" style={{ color: "var(--blue)", textDecoration: "none", fontSize: 12.5 }}>
                         {t.merchant_name}
                       </a>
                     ) : (
@@ -352,6 +363,8 @@ export default function TasksList({ currentUserId, isManager }: Props) {
           </tbody>
         </table>
       </div>
+
+      <Pagination page={page} total={total} onChange={setPage} />
 
       {/* New task modal */}
       <Modal open={newTaskOpen} onClose={() => { setNewTaskOpen(false); setForm(DEFAULT_TASK); setMerchantResults([]); }} title="New task" wide footer={<>

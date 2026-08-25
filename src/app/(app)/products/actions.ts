@@ -56,7 +56,7 @@ export async function exportProductsCSV(filters: {
   if (filters.merchant) q = q.ilike("store_name", `%${filters.merchant}%`);
   if (filters.category) q = q.ilike("category",   `%${filters.category}%`);
   if (filters.brand)    q = q.ilike("brand",      `%${filters.brand}%`);
-  const { data, error } = await q.limit(5000);
+  const { data, error } = await q.limit(100000);
   if (error) throw new Error((error as { message: string }).message);
   if (!(data as unknown[])?.length) return "";
   const cols = [

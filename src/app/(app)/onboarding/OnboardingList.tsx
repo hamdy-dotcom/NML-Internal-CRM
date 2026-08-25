@@ -546,7 +546,7 @@ export default function OnboardingList({ currentUserId }: Props) {
 
                   {/* Merchant name */}
                   <td>
-                    <a href={`/merchants/${row.id}`}
+                    <a href={`/merchants/${row.id}`} target="_blank" rel="noreferrer"
                       style={{ color: "var(--blue)", textDecoration: "none", fontWeight: 500, fontSize: 13 }}>
                       {row.store_name}
                     </a>

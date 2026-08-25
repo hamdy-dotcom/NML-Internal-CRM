@@ -16,7 +16,7 @@ interface PageProps {
 async function LeadsData({ searchParams }: PageProps) {
   const params = await searchParams;
   const page = Math.max(1, parseInt(params.page ?? "1", 10));
-  const PAGE_SIZE = 50;
+  const PAGE_SIZE = 100;
   const offset = (page - 1) * PAGE_SIZE;
 
   const supabase = await createClient();

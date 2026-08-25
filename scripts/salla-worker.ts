@@ -26,6 +26,7 @@ import { createClient } from "@supabase/supabase-js";
 import { resolveStore } from "../src/lib/salla/resolver";
 import { walkStore }    from "../src/lib/salla/walker";
 import { enrichWithGallery } from "../src/lib/salla/gallery";
+import { importProducts } from "../src/lib/salla/importProducts";
 import type { WalkProgress, NormalizedProduct } from "../src/lib/salla/types";
 
 // ── Supabase client (service role) ────────────────────────────────────────────
@@ -72,6 +73,7 @@ async function processJob(job: {
   id: string;
   store_url: string;
   merchant_id: string;
+  auto_import: boolean;
 }): Promise<void> {
   const { id: jobId, store_url: storeUrl } = job;
   console.log(`[${jobId}] Processing ${storeUrl}`);
@@ -145,6 +147,17 @@ async function processJob(job: {
   });
 
   console.log(`[${jobId}] Done — ${products.length} products ready for import`);
+
+  if (job.auto_import) {
+    console.log(`[${jobId}] Auto-importing ${products.length} products…`);
+    try {
+      const { imported, updated } = await importProducts(job.merchant_id, products);
+      console.log(`[${jobId}] Auto-import complete — ${imported} inserted, ${updated} updated`);
+    } catch (e) {
+      // Non-fatal: products are still in fetched_products, manual import still works
+      console.error(`[${jobId}] Auto-import failed:`, e instanceof Error ? e.message : e);
+    }
+  }
 }
 
 // ── Main polling loop ─────────────────────────────────────────────────────────
@@ -153,12 +166,13 @@ async function claimNextJob(): Promise<{
   id: string;
   store_url: string;
   merchant_id: string;
+  auto_import: boolean;
 } | null> {
   // Read-then-update optimistic claim (safe for a single worker).
   // For multi-worker setups, replace with a Postgres function using FOR UPDATE SKIP LOCKED.
   const { data: rows } = await db
     .from("salla_fetch_jobs")
-    .select("id, store_url, merchant_id")
+    .select("id, store_url, merchant_id, auto_import")
     .eq("status", "pending")
     .order("created_at")
     .limit(1);

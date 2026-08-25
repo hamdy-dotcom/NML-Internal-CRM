@@ -5,7 +5,7 @@ import FilterBar from './FilterBar';
 import ViewTabs from './ViewTabs';
 import type { VMerchantList } from '@/lib/database.types';
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 100;
 
 const VIEWS = [
   { key: 'all',          label: 'All' },

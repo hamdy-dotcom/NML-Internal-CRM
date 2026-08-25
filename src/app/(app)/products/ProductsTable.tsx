@@ -1,11 +1,13 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
-import { fmtDate } from "@/lib/utils";
+import { fmtDate, STAGE_LABELS } from "@/lib/utils";
+import type { MerchantStage } from "@/lib/database.types";
 import EmptyState from "@/components/ui/EmptyState";
 import SkeletonRows from "@/components/ui/SkeletonRows";
+import Pagination, { PAGE_SIZE } from "@/components/ui/Pagination";
 import ProductDrawer from "./ProductDrawer";
 import { exportProductsCSV } from "./actions";
 
@@ -29,37 +31,21 @@ interface ProductRow {
   merchants: { store_name: string; stage: string };
 }
 
-type Tab = "active" | "onboarding" | "all";
-
-// Merchant stages that count as "onboarding"
-const ONBOARDING_STAGES = ["cta_completed", "onboarding"];
-
-const TABS: { key: Tab; label: string }[] = [
-  { key: "active",     label: "Active merchants" },
-  { key: "onboarding", label: "Onboarding" },
-  { key: "all",        label: "All" },
+const PRODUCT_STAGES: MerchantStage[] = [
+  "new", "assigned", "contacted", "interested",
+  "form_sent", "cta_completed", "onboarding", "active", "on_hold", "lost", "not_interested",
 ];
-
-const MERCHANT_STAGE_LABELS: Record<string, string> = {
-  lead:          "Lead",
-  cta_sent:      "CTA sent",
-  cta_completed: "CTA done",
-  onboarding:    "Onboarding",
-  active:        "Active",
-  paused:        "Paused",
-  churned:       "Churned",
-};
 
 const MERCHANT_STAGE_COLOR: Record<string, string> = {
   active:        "var(--green)",
   onboarding:    "var(--blue)",
   cta_completed: "var(--blue)",
-  paused:        "var(--amber)",
-  churned:       "var(--red)",
+  on_hold:       "var(--amber)",
+  lost:          "var(--red)",
 };
 
 function MerchantStageBadge({ stage }: { stage: string }) {
-  const label = MERCHANT_STAGE_LABELS[stage] ?? stage;
+  const label = STAGE_LABELS[stage as MerchantStage] ?? stage;
   const color = MERCHANT_STAGE_COLOR[stage] ?? "var(--ink-3)";
   return (
     <span style={{
@@ -73,35 +59,26 @@ function MerchantStageBadge({ stage }: { stage: string }) {
 }
 
 interface Filters {
-  merchant:  string;
-  category:  string;
-  brand:     string;
-  priceMin:  string;
-  priceMax:  string;
-  hasImage:  "" | "yes" | "no";
-  dateFrom:  string;
-  dateTo:    string;
+  merchant: string;
+  stage:    string;
+  brand:    string;
+  priceMin: string;
+  priceMax: string;
 }
 
 const DEFAULT_FILTERS: Filters = {
-  merchant: "", category: "", brand: "",
-  priceMin: "", priceMax: "", hasImage: "",
-  dateFrom: "", dateTo: "",
+  merchant: "", stage: "", brand: "", priceMin: "", priceMax: "",
 };
-
-interface Props {
-  tabCounts: Record<Tab, number>;
-}
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function ProductsTable({ tabCounts }: Props) {
-  const supabase     = createClient();
+export default function ProductsTable() {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase     = createClient() as any;
   const router       = useRouter();
   const searchParams = useSearchParams();
   const productId    = searchParams.get("productId");
 
-  const [tab,              setTab]              = useState<Tab>("active");
   const [viewMode,         setViewMode]         = useState<"table" | "grid">("table");
   const [filters,          setFilters]          = useState<Filters>(DEFAULT_FILTERS);
   const [filtersOpen,      setFiltersOpen]      = useState(false);
@@ -109,8 +86,15 @@ export default function ProductsTable({ tabCounts }: Props) {
   const [loading,          setLoading]          = useState(true);
   const [selected,         setSelected]         = useState<Set<string>>(new Set());
   const [working,          setWorking]          = useState(false);
+  const [page,             setPage]             = useState(0);
+  const [total,            setTotal]            = useState(0);
+  const [fetchError,       setFetchError]       = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
   const [merchantOptions,  setMerchantOptions]  = useState<string[]>([]);
   const [merchantDropdown, setMerchantDropdown] = useState(false);
+  const [brandOptions,     setBrandOptions]     = useState<string[]>([]);
+  const [brandDropdown,    setBrandDropdown]    = useState(false);
 
   // Persist view mode
   useEffect(() => {
@@ -118,53 +102,108 @@ export default function ProductsTable({ tabCounts }: Props) {
     if (saved === "grid" || saved === "table") setViewMode(saved);
   }, []);
 
-  // Load merchant names for the searchable dropdown
+  // Load merchant + brand options for comboboxes
   useEffect(() => {
-    supabase.from("merchants").select("store_name").order("store_name").then(({ data }) => {
-      if (data) {
-        const unique = [...new Set(data.map(m => m.store_name).filter(Boolean) as string[])];
-        setMerchantOptions(unique);
+    supabase.from("merchants").select("store_name").order("store_name").then(
+      ({ data }: { data: Array<{ store_name: string }> | null }) => {
+        if (data) setMerchantOptions([...new Set(data.map(m => m.store_name).filter(Boolean) as string[])]);
       }
-    });
+    );
+    supabase.from("products").select("brand").not("brand", "is", null).order("brand").limit(500).then(
+      ({ data }: { data: Array<{ brand: string }> | null }) => {
+        if (data) setBrandOptions([...new Set(data.map(p => p.brand).filter(Boolean) as string[])]);
+      }
+    );
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
   const setView = (v: "table" | "grid") => {
     setViewMode(v); localStorage.setItem("products-view", v);
   };
 
   const filterCount = Object.values(filters).filter(v => v !== "").length;
 
+  // Reset to page 0 whenever any filter changes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { setPage(0); }, [filters]);
+
   const fetchProducts = useCallback(async () => {
+    // Cancel any in-flight request from a previous render cycle
+    abortRef.current?.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+
     setLoading(true);
+    setFetchError(null);
     setSelected(new Set());
+    const t0 = performance.now();
+
     try {
+      // Resolve merchant IDs first when filtering by merchant name or stage —
+      // avoids a full products scan for the count (RLS calls can_see_merchant per row).
+      let merchantIdFilter: string[] | null = null;
+      if (filters.merchant || filters.stage) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let mq = (supabase.from("merchants") as any).select("id");
+        if (filters.merchant) mq = mq.ilike("store_name", `%${filters.merchant}%`);
+        if (filters.stage)    mq = mq.eq("stage", filters.stage);
+        const { data: mRows } = await mq;
+        merchantIdFilter = ((mRows ?? []) as { id: string }[]).map(m => m.id);
+        console.log(`[products] merchant filter → ${merchantIdFilter.length} merchant IDs`);
+        if (merchantIdFilter.length === 0) {
+          setProducts([]); setTotal(0); return;
+        }
+      }
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let q = (supabase.from("products") as any)
-        .select("id, name, sku, image_url, category, brand, price, sale_price, nml_cost, stock, status, source, created_at, merchant_id, merchants!inner(store_name, stage)");
+        .select("id, name, sku, image_url, category, brand, price, sale_price, nml_cost, stock, status, source, created_at, merchant_id", { count: "exact" });
 
-      if (tab === "active")     q = q.eq("merchants.stage", "active");
-      if (tab === "onboarding") q = q.in("merchants.stage", ONBOARDING_STAGES);
-
-      if (filters.merchant) q = q.ilike("merchants.store_name", `%${filters.merchant}%`);
-      if (filters.category) q = q.ilike("category",   `%${filters.category}%`);
-      if (filters.brand)    q = q.ilike("brand",       `%${filters.brand}%`);
+      if (merchantIdFilter) q = q.in("merchant_id", merchantIdFilter);
+      if (filters.brand)    q = q.ilike("brand", `%${filters.brand}%`);
       if (filters.priceMin) q = q.gte("price", filters.priceMin);
       if (filters.priceMax) q = q.lte("price", filters.priceMax);
-      if (filters.hasImage === "yes") q = q.not("image_url", "is", null);
-      if (filters.hasImage === "no")  q = q.is("image_url", null);
-      if (filters.dateFrom) q = q.gte("created_at", filters.dateFrom);
-      if (filters.dateTo)   q = q.lte("created_at", filters.dateTo + "T23:59:59");
 
-      q = q.order("created_at", { ascending: false }).limit(500);
+      const from = page * PAGE_SIZE;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error, count } = await (q.order("created_at", { ascending: false }).range(from, from + PAGE_SIZE - 1) as any);
 
-      const { data, error } = await q;
-      if (error) toast.error((error as { message: string }).message);
-      else setProducts((data ?? []) as ProductRow[]);
+      if (ctrl.signal.aborted) return;
+      console.log(`[products] ${Math.round(performance.now() - t0)}ms — rows:${(data ?? []).length} count:${count} error:${error?.message ?? 'none'}`);
+
+      if (error) { setFetchError(error.message); return; }
+
+      // Fetch merchant names only for the ≤100 rows we loaded
+      const mids = [...new Set(((data ?? []) as { merchant_id: string }[]).map(p => p.merchant_id))];
+      const merchantMap: Record<string, { store_name: string; stage: string }> = {};
+      if (mids.length) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: mData } = await (supabase.from("merchants") as any)
+          .select("id, store_name, stage")
+          .in("id", mids);
+        for (const m of (mData ?? []) as { id: string; store_name: string; stage: string }[]) {
+          merchantMap[m.id] = { store_name: m.store_name, stage: m.stage };
+        }
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rows = ((data ?? []) as any[]).map(p => ({
+        ...p,
+        merchants: merchantMap[p.merchant_id] ?? { store_name: "—", stage: "" },
+      }));
+
+      setProducts(rows as ProductRow[]);
+      setTotal(count ?? 0);
+    } catch (e) {
+      if (ctrl.signal.aborted) return;
+      const msg = (e as Error).message ?? String(e);
+      console.error(`[products] fetch error after ${Math.round(performance.now() - t0)}ms:`, msg);
+      setFetchError(msg);
     } finally {
-      setLoading(false);
+      if (!ctrl.signal.aborted) setLoading(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, filters]);
+  }, [filters, page]);
 
   useEffect(() => { fetchProducts(); }, [fetchProducts]);
 
@@ -201,7 +240,6 @@ export default function ProductsTable({ tabCounts }: Props) {
     try {
       const csv = await exportProductsCSV({
         merchant: filters.merchant || undefined,
-        category: filters.category || undefined,
         brand:    filters.brand    || undefined,
       });
       if (!csv) { toast.info("No data to export"); return; }
@@ -213,11 +251,61 @@ export default function ProductsTable({ tabCounts }: Props) {
     } catch (e) { toast.error((e as Error).message); }
   };
 
+  // ── Combobox helper ───────────────────────────────────────────────────────
+  function Combobox({
+    label, value, options, open, placeholder,
+    onChange, onOpen, onClose, onSelect,
+  }: {
+    label: string; value: string; options: string[]; open: boolean; placeholder: string;
+    onChange: (v: string) => void;
+    onOpen: () => void; onClose: () => void; onSelect: (v: string) => void;
+  }) {
+    const visible = options.filter(n => !value || n.toLowerCase().includes(value.toLowerCase())).slice(0, 25);
+    return (
+      <div style={{ position: "relative" }}>
+        <label className="field-label">{label}</label>
+        <input
+          className="field"
+          type="text"
+          placeholder={placeholder}
+          value={value}
+          onChange={e => { onChange(e.target.value); onOpen(); }}
+          onFocus={onOpen}
+          onBlur={() => setTimeout(onClose, 150)}
+        />
+        {open && visible.length > 0 && (
+          <div style={{
+            position: "absolute", top: "100%", left: 0, right: 0, zIndex: 50,
+            background: "rgba(255,255,255,.97)", border: "1px solid var(--g-line)",
+            borderRadius: 10, boxShadow: "0 8px 24px rgba(40,60,110,.12)",
+            maxHeight: 200, overflowY: "auto",
+          }}>
+            {visible.map(name => (
+              <div
+                key={name}
+                style={{ padding: "8px 12px", cursor: "pointer", fontSize: 12.5 }}
+                onMouseDown={() => onSelect(name)}
+              >
+                {name}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div style={{ paddingTop: 16 }}>
       {/* Page header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-        <h1 style={{ fontSize: 17, fontWeight: 500, margin: 0, color: "var(--ink)" }}>Products</h1>
+        <h1 style={{ fontSize: 17, fontWeight: 500, margin: 0, color: "var(--ink)" }}>
+          Products
+          <span style={{ fontSize: 12.5, fontWeight: 400, color: "var(--ink-4)", marginLeft: 8 }}>
+            {loading ? "…" : `${total.toLocaleString("en-US")} products`}
+          </span>
+        </h1>
         <div style={{ display: "flex", gap: 8 }}>
           <div style={{ display: "flex", gap: 2, background: "rgba(255,255,255,.55)", borderRadius: 999, padding: 3 }}>
             {(["table", "grid"] as const).map(v => (
@@ -232,87 +320,62 @@ export default function ProductsTable({ tabCounts }: Props) {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div style={{ display: "flex", gap: 4, marginBottom: 12, overflowX: "auto" }}>
-        {TABS.map(t => (
-          <button key={t.key} className={`pill${tab === t.key ? " active" : ""}`} onClick={() => setTab(t.key)}>
-            {t.label}
-            <span style={{ fontSize: 11, background: "rgba(0,0,0,.07)", padding: "1px 6px", borderRadius: 999 }}>
-              {tabCounts[t.key] ?? 0}
-            </span>
-          </button>
-        ))}
-      </div>
-
       {/* Filters panel */}
       {filtersOpen && (
         <div className="glass-panel" style={{ padding: "14px 16px", marginBottom: 12, display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))", gap: 10 }}>
           {/* Merchant combobox */}
-          <div style={{ position: "relative" }}>
-            <label className="field-label">Merchant</label>
-            <input
-              className="field"
-              type="text"
-              placeholder="Search merchant…"
-              value={filters.merchant}
-              onChange={e => { setFilters(f => ({ ...f, merchant: e.target.value })); setMerchantDropdown(true); }}
-              onFocus={() => setMerchantDropdown(true)}
-              onBlur={() => setTimeout(() => setMerchantDropdown(false), 150)}
-            />
-            {merchantDropdown && merchantOptions.filter(n => !filters.merchant || n.toLowerCase().includes(filters.merchant.toLowerCase())).length > 0 && (
-              <div style={{
-                position: "absolute", top: "100%", left: 0, right: 0, zIndex: 50,
-                background: "rgba(255,255,255,.97)", border: "1px solid var(--g-line)",
-                borderRadius: 10, boxShadow: "0 8px 24px rgba(40,60,110,.12)",
-                maxHeight: 200, overflowY: "auto",
-              }}>
-                {merchantOptions
-                  .filter(n => !filters.merchant || n.toLowerCase().includes(filters.merchant.toLowerCase()))
-                  .slice(0, 20)
-                  .map(name => (
-                    <div
-                      key={name}
-                      style={{ padding: "8px 12px", cursor: "pointer", fontSize: 12.5 }}
-                      onMouseDown={() => { setFilters(f => ({ ...f, merchant: name })); setMerchantDropdown(false); }}
-                    >
-                      {name}
-                    </div>
-                  ))}
-              </div>
-            )}
-          </div>
+          <Combobox
+            label="Merchant"
+            value={filters.merchant}
+            options={merchantOptions}
+            open={merchantDropdown}
+            placeholder="Search merchant…"
+            onChange={v => setFilters(f => ({ ...f, merchant: v }))}
+            onOpen={() => setMerchantDropdown(true)}
+            onClose={() => setMerchantDropdown(false)}
+            onSelect={v => { setFilters(f => ({ ...f, merchant: v })); setMerchantDropdown(false); }}
+          />
 
-          {[
-            { key: "category" as const, label: "Category",  type: "text",   placeholder: "Category…" },
-            { key: "brand"    as const, label: "Brand",     type: "text",   placeholder: "Brand…" },
-            { key: "priceMin" as const, label: "Price min", type: "number", placeholder: "0" },
-            { key: "priceMax" as const, label: "Price max", type: "number", placeholder: "∞" },
-          ].map(({ key, label, type, placeholder }) => (
-            <div key={key}>
-              <label className="field-label">{label}</label>
-              <input className="field" type={type} placeholder={placeholder}
-                value={filters[key]}
-                onChange={e => setFilters(f => ({ ...f, [key]: e.target.value }))} />
-            </div>
-          ))}
+          {/* Merchant stage */}
           <div>
-            <label className="field-label">Has image</label>
-            <select className="field" value={filters.hasImage} onChange={e => setFilters(f => ({ ...f, hasImage: e.target.value as Filters["hasImage"] }))}>
-              <option value="">Any</option>
-              <option value="yes">Yes</option>
-              <option value="no">No</option>
+            <label className="field-label">Merchant stage</label>
+            <select className="field" value={filters.stage} onChange={e => setFilters(f => ({ ...f, stage: e.target.value }))}>
+              <option value="">Any stage</option>
+              {PRODUCT_STAGES.map(s => (
+                <option key={s} value={s}>{STAGE_LABELS[s]}</option>
+              ))}
             </select>
           </div>
+
+          {/* Brand combobox */}
+          <Combobox
+            label="Brand"
+            value={filters.brand}
+            options={brandOptions}
+            open={brandDropdown}
+            placeholder="Search brand…"
+            onChange={v => setFilters(f => ({ ...f, brand: v }))}
+            onOpen={() => setBrandDropdown(true)}
+            onClose={() => setBrandDropdown(false)}
+            onSelect={v => { setFilters(f => ({ ...f, brand: v })); setBrandDropdown(false); }}
+          />
+
+          {/* Price range */}
           <div>
-            <label className="field-label">Added from</label>
-            <input className="field" type="date" value={filters.dateFrom} onChange={e => setFilters(f => ({ ...f, dateFrom: e.target.value }))} />
+            <label className="field-label">Price min</label>
+            <input className="field" type="number" placeholder="0"
+              value={filters.priceMin} onChange={e => setFilters(f => ({ ...f, priceMin: e.target.value }))} />
           </div>
           <div>
-            <label className="field-label">Added to</label>
-            <input className="field" type="date" value={filters.dateTo} onChange={e => setFilters(f => ({ ...f, dateTo: e.target.value }))} />
+            <label className="field-label">Price max</label>
+            <input className="field" type="number" placeholder="∞"
+              value={filters.priceMax} onChange={e => setFilters(f => ({ ...f, priceMax: e.target.value }))} />
           </div>
+
           <div style={{ display: "flex", alignItems: "flex-end" }}>
-            <button className="pill ghost" style={{ width: "100%" }} onClick={() => setFilters(DEFAULT_FILTERS)}>Clear filters</button>
+            <button className="pill ghost" style={{ width: "100%" }} onClick={() => setFilters(DEFAULT_FILTERS)}>
+              Clear filters
+            </button>
           </div>
         </div>
       )}
@@ -327,8 +390,18 @@ export default function ProductsTable({ tabCounts }: Props) {
         </div>
       )}
 
+      {/* Error state — one failed request shows this; user must click Retry */}
+      {fetchError && (
+        <div style={{ textAlign: "center", padding: "48px 0" }}>
+          <div style={{ fontSize: 13, color: "var(--red)", marginBottom: 12, maxWidth: 480, margin: "0 auto 12px" }}>
+            {fetchError}
+          </div>
+          <button className="pill outline" onClick={() => fetchProducts()}>Retry</button>
+        </div>
+      )}
+
       {/* Table view */}
-      {viewMode === "table" ? (
+      {!fetchError && viewMode === "table" ? (
         <div style={{ overflowX: "auto" }}>
           <table className="nml-table">
             <thead>
@@ -341,7 +414,7 @@ export default function ProductsTable({ tabCounts }: Props) {
                 <th style={{ width: 44 }}>Image</th>
                 <th>Name</th>
                 <th>Merchant</th>
-                <th>Merchant status</th>
+                <th>Merchant stage</th>
                 <th>Category</th>
                 <th>Price</th>
                 <th>Sale price</th>
@@ -355,8 +428,7 @@ export default function ProductsTable({ tabCounts }: Props) {
               ) : products.length === 0 ? (
                 <tr>
                   <td colSpan={10}>
-                    <EmptyState title="No products"
-                      description={tab === "all" ? "No products match your filters." : `No products for ${TABS.find(t => t.key === tab)?.label ?? tab}.`} />
+                    <EmptyState title="No products" description="No products match your filters." />
                   </td>
                 </tr>
               ) : products.map(p => (
@@ -382,14 +454,12 @@ export default function ProductsTable({ tabCounts }: Props) {
                     {p.sku && <div className="sub mono">{p.sku}</div>}
                   </td>
                   <td>
-                    <a href={`/merchants/${p.merchant_id}`} onClick={e => e.stopPropagation()}
+                    <a href={`/merchants/${p.merchant_id}`} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
                       style={{ color: "var(--blue)", textDecoration: "none", fontSize: 12.5 }}>
                       {p.merchants.store_name}
                     </a>
                   </td>
-                  <td>
-                    <MerchantStageBadge stage={p.merchants.stage} />
-                  </td>
+                  <td><MerchantStageBadge stage={p.merchants.stage} /></td>
                   <td><span className="sub">{p.category || "—"}</span></td>
                   <td><span className="num">{p.price ? `SAR ${Number(p.price).toLocaleString()}` : "—"}</span></td>
                   <td><span className="num">{p.sale_price ? `SAR ${Number(p.sale_price).toLocaleString()}` : "—"}</span></td>
@@ -400,7 +470,7 @@ export default function ProductsTable({ tabCounts }: Props) {
             </tbody>
           </table>
         </div>
-      ) : (
+      ) : !fetchError && (
         /* Grid view */
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(190px,1fr))", gap: 12 }}>
           {loading ? (
@@ -413,8 +483,7 @@ export default function ProductsTable({ tabCounts }: Props) {
             ))
           ) : products.length === 0 ? (
             <div style={{ gridColumn: "1/-1" }}>
-              <EmptyState title="No products"
-                description={tab === "all" ? "No products match your filters." : `No products for ${TABS.find(t => t.key === tab)?.label ?? tab}.`} />
+              <EmptyState title="No products" description="No products match your filters." />
             </div>
           ) : products.map(p => (
             <div key={p.id} className="glass-card"
@@ -438,6 +507,8 @@ export default function ProductsTable({ tabCounts }: Props) {
           ))}
         </div>
       )}
+
+      <Pagination page={page} total={total} onChange={setPage} />
 
       {/* Product drawer */}
       {productId && (

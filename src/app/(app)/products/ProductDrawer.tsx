@@ -213,7 +213,7 @@ export default function ProductDrawer({
             {/* Product details */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 16px" }}>
               <div className="kv"><span className="k">Merchant</span>
-                <a href={`/merchants/${product.merchant_id}`} style={{ color: "var(--blue)", textDecoration: "none", fontSize: 12.5 }}>{product.store_name}</a>
+                <a href={`/merchants/${product.merchant_id}`} target="_blank" rel="noreferrer" style={{ color: "var(--blue)", textDecoration: "none", fontSize: 12.5 }}>{product.store_name}</a>
               </div>
               <div className="kv"><span className="k">Category</span><span>{product.category || "—"}</span></div>
               <div className="kv"><span className="k">Brand</span><span>{product.brand || "—"}</span></div>
