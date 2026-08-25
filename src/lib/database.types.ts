@@ -213,6 +213,8 @@ export interface Product {
   stock: number | null;
   category: string | null;
   category_mapped: string | null;
+  nml_category: string | null;
+  nml_subcategory: string | null;
   brand: string | null;
   weight_g: number | null;
   description: string | null;
@@ -380,6 +382,17 @@ export interface VSpecialistPerformance {
   avg_days_to_contact: string | null;
 }
 
+export interface VNmlCategoryCount {
+  nml_category: string;
+  product_count: number;
+}
+
+export interface VNmlSubcategoryCount {
+  nml_category: string;
+  nml_subcategory: string;
+  product_count: number;
+}
+
 export interface ProductCategory {
   raw_category:    string;
   mapped_category: string | null;
@@ -428,8 +441,10 @@ export type Database = {
     };
     Views: {
       v_merchants_list:         { Row: VMerchantList         & Record<string, unknown>; Relationships: never[] };
-      v_product_margin:         { Row: VProductMargin        & Record<string, unknown>; Relationships: never[] };
-      v_specialist_performance: { Row: VSpecialistPerformance & Record<string, unknown>; Relationships: never[] };
+      v_product_margin:          { Row: VProductMargin         & Record<string, unknown>; Relationships: never[] };
+      v_specialist_performance:  { Row: VSpecialistPerformance & Record<string, unknown>; Relationships: never[] };
+      v_nml_category_counts:     { Row: VNmlCategoryCount      & Record<string, unknown>; Relationships: never[] };
+      v_nml_subcategory_counts:  { Row: VNmlSubcategoryCount   & Record<string, unknown>; Relationships: never[] };
     };
     Functions: {
       my_role:          { Args: Record<string, never>; Returns: UserRole };

@@ -6,7 +6,8 @@ interface CatalogueProduct {
   name: string;
   image_url: string | null;
   images: string[] | null;
-  category_mapped: string | null;
+  nml_category: string | null;
+  nml_subcategory: string | null;
   price: number | null;
   description: string | null;
   url: string | null;
@@ -213,17 +214,19 @@ export default function CatalogueProductModal({ product, onClose }: Props) {
               </button>
             </div>
 
-            {/* Category pill */}
-            {product.category_mapped && (
-              <div style={{ marginBottom: 12, flexShrink: 0 }}>
-                <span style={{
-                  display: "inline-block", padding: "4px 12px",
-                  borderRadius: 20, background: "rgba(220,38,38,.08)",
-                  color: "#b91c1c", fontSize: 12, fontWeight: 500,
-                  direction: "rtl",
-                }}>
-                  {product.category_mapped}
-                </span>
+            {/* Category pills */}
+            {(product.nml_category || product.nml_subcategory) && (
+              <div style={{ marginBottom: 12, flexShrink: 0, display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {product.nml_category && (
+                  <span style={{ display: "inline-block", padding: "4px 12px", borderRadius: 20, background: "rgba(220,38,38,.08)", color: "#b91c1c", fontSize: 12, fontWeight: 500, direction: "rtl" }}>
+                    {product.nml_category}
+                  </span>
+                )}
+                {product.nml_subcategory && (
+                  <span style={{ display: "inline-block", padding: "4px 12px", borderRadius: 20, background: "rgba(0,0,0,.06)", color: "var(--ink-2)", fontSize: 12, fontWeight: 500, direction: "rtl" }}>
+                    {product.nml_subcategory}
+                  </span>
+                )}
               </div>
             )}
 

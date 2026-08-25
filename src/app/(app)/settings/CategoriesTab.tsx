@@ -1,299 +1,223 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { NML_CATEGORIES } from "@/lib/categories";
-import Pagination, { PAGE_SIZE } from "@/components/ui/Pagination";
 
-interface CategoryRow {
-  raw_category: string;
-  mapped_category: string | null;
+interface SubcategoryRow {
+  nml_category: string;
+  nml_subcategory: string;
   product_count: number;
-  confidence: "high" | "medium" | "low" | "none" | null;
-  reviewed: boolean;
-}
-
-const CONFIDENCE_COLORS: Record<string, string> = {
-  high:   "var(--green, #22c55e)",
-  medium: "#f59e0b",
-  low:    "#f97316",
-  none:   "var(--ink-3)",
-};
-
-function ConfidenceBadge({ value }: { value: string | null }) {
-  if (!value) return <span style={{ color: "var(--ink-3)", fontSize: 12 }}>—</span>;
-  return (
-    <span style={{
-      display: "inline-block",
-      padding: "2px 7px",
-      borderRadius: 99,
-      fontSize: 11,
-      fontWeight: 500,
-      background: `${CONFIDENCE_COLORS[value] ?? "#888"}22`,
-      color: CONFIDENCE_COLORS[value] ?? "#888",
-    }}>
-      {value}
-    </span>
-  );
 }
 
 export default function CategoriesTab() {
   const supabase = createClient();
 
-  const [rows, setRows]         = useState<CategoryRow[]>([]);
-  const [total, setTotal]       = useState(0);
-  const [page, setPage]         = useState(0);
-  const [loading, setLoading]   = useState(true);
-  const [search, setSearch]     = useState("");
-  const [unmappedOnly, setUnmappedOnly] = useState(false);
-  const [lowConfOnly, setLowConfOnly]   = useState(false);
+  const [allRows, setAllRows]     = useState<SubcategoryRow[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [search, setSearch]       = useState("");
+  const [catFilter, setCatFilter] = useState("");
 
-  // Bulk reassign
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [bulkTarget, setBulkTarget] = useState("");
-  const [bulkSaving, setBulkSaving] = useState(false);
-
-  // Inline save flash
-  const [savedFlash, setSavedFlash] = useState<string | null>(null);
+  const [editingKey, setEditingKey]   = useState<string | null>(null);
+  const [editingValue, setEditingValue] = useState("");
+  const [saving, setSaving]           = useState(false);
+  const [flashKey, setFlashKey]       = useState<string | null>(null);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const flash = (raw: string) => {
-    setSavedFlash(raw);
+  const rowKey = (r: SubcategoryRow) => `${r.nml_category}||${r.nml_subcategory}`;
+
+  const flash = (key: string) => {
+    setFlashKey(key);
     if (flashTimer.current) clearTimeout(flashTimer.current);
-    flashTimer.current = setTimeout(() => setSavedFlash(null), 1500);
+    flashTimer.current = setTimeout(() => setFlashKey(null), 1500);
   };
 
-  const fetch = useCallback(async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let q = (supabase.from("product_categories") as any)
-      .select("raw_category, mapped_category, product_count, confidence, reviewed", { count: "exact" })
-      .order("product_count", { ascending: false });
-
-    if (search)       q = q.ilike("raw_category", `%${search}%`);
-    if (unmappedOnly) q = q.is("mapped_category", null);
-    if (lowConfOnly)  q = q.in("confidence", ["low", "none"]);
-
-    const from = page * PAGE_SIZE;
-    const { data, error, count } = await (q.range(from, from + PAGE_SIZE - 1) as any);
+    const { data, error } = await (supabase.from("v_nml_subcategory_counts") as any)
+      .select("nml_category, nml_subcategory, product_count");
     setLoading(false);
     if (error) { console.error(error); return; }
-    setRows((data ?? []) as CategoryRow[]);
-    setTotal(count ?? 0);
-    setSelected(new Set());
-  }, [search, unmappedOnly, lowConfOnly, page]);  // eslint-disable-line react-hooks/exhaustive-deps
+    const sorted = ((data ?? []) as SubcategoryRow[]).sort((a, b) => {
+      const catCmp = a.nml_category.localeCompare(b.nml_category, "ar");
+      if (catCmp !== 0) return catCmp;
+      return b.product_count - a.product_count;
+    });
+    setAllRows(sorted);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => { fetch(); }, [fetch]);
-  useEffect(() => { setPage(0); }, [search, unmappedOnly, lowConfOnly]);
+  useEffect(() => { load(); }, [load]);
 
-  const updateRow = async (raw: string, patch: Partial<CategoryRow>) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (supabase.from("product_categories") as any)
-      .update({ ...patch, updated_at: new Date().toISOString() })
-      .eq("raw_category", raw);
-    if (error) { alert(error.message); return; }
-    setRows(prev => prev.map(r => r.raw_category === raw ? { ...r, ...patch } : r));
-    flash(raw);
-  };
+  const categories = Array.from(new Set(allRows.map(r => r.nml_category))).sort((a, b) =>
+    a.localeCompare(b, "ar")
+  );
 
-  const bulkReassign = async () => {
-    if (!bulkTarget || !selected.size) return;
-    setBulkSaving(true);
-    const keys = [...selected];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (supabase.from("product_categories") as any)
-      .update({ mapped_category: bulkTarget, confidence: "high", updated_at: new Date().toISOString() })
-      .in("raw_category", keys);
-    setBulkSaving(false);
-    if (error) { alert(error.message); return; }
-    setRows(prev => prev.map(r =>
-      selected.has(r.raw_category)
-        ? { ...r, mapped_category: bulkTarget, confidence: "high" }
-        : r
-    ));
-    setSelected(new Set());
-    setBulkTarget("");
-  };
-
-  const toggleAll = () => {
-    if (selected.size === rows.length) {
-      setSelected(new Set());
-    } else {
-      setSelected(new Set(rows.map(r => r.raw_category)));
+  const filtered = allRows.filter(r => {
+    if (catFilter && r.nml_category !== catFilter) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      return r.nml_category.toLowerCase().includes(q) || r.nml_subcategory.toLowerCase().includes(q);
     }
+    return true;
+  });
+
+  const startEdit = (row: SubcategoryRow) => {
+    setEditingKey(rowKey(row));
+    setEditingValue(row.nml_subcategory);
   };
 
-  const mappedCount = rows.filter(r => r.mapped_category).length;
-  const unmappedTotal = total - mappedCount; // approx for header
+  const commitEdit = async (row: SubcategoryRow) => {
+    const newVal = editingValue.trim();
+    setEditingKey(null);
+    if (!newVal || newVal === row.nml_subcategory) return;
+    setSaving(true);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase.from("products") as any)
+      .update({ nml_subcategory: newVal })
+      .eq("nml_category", row.nml_category)
+      .eq("nml_subcategory", row.nml_subcategory);
+    setSaving(false);
+    if (error) { alert(error.message); return; }
+    const key = `${row.nml_category}||${newVal}`;
+    setAllRows(prev => prev.map(r =>
+      rowKey(r) === rowKey(row) ? { ...r, nml_subcategory: newVal } : r
+    ));
+    flash(key);
+  };
+
+  const cancelEdit = () => {
+    setEditingKey(null);
+    setEditingValue("");
+  };
 
   return (
     <div>
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
         <div style={{ fontSize: 14, color: "var(--ink-2)" }}>
-          {total.toLocaleString("en-US")} raw categories
+          {loading ? "Loading…" : `${filtered.length.toLocaleString("en-US")} subcategories`}
+          {saving && <span style={{ marginLeft: 8, color: "var(--ink-3)" }}>Saving…</span>}
         </div>
         <div style={{ flex: 1 }} />
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <input
             type="search"
-            placeholder="Search raw category…"
+            placeholder="Search category or subcategory…"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid var(--g-line)", background: "var(--surface)", color: "var(--ink)", fontSize: 13, width: 200 }}
+            style={{
+              padding: "6px 10px", borderRadius: 8,
+              border: "1px solid var(--g-line)", background: "var(--surface)",
+              color: "var(--ink)", fontSize: 13, width: 240,
+            }}
           />
-          <button
-            className={`pill ${unmappedOnly ? "dark" : "outline"}`}
-            onClick={() => setUnmappedOnly(v => !v)}
-            style={{ fontSize: 12 }}
-          >
-            Unmapped only
-          </button>
-          <button
-            className={`pill ${lowConfOnly ? "dark" : "outline"}`}
-            onClick={() => setLowConfOnly(v => !v)}
-            style={{ fontSize: 12 }}
-          >
-            Low / none confidence
-          </button>
-        </div>
-      </div>
-
-      {/* Bulk action bar */}
-      {selected.size > 0 && (
-        <div style={{
-          display: "flex", alignItems: "center", gap: 10, padding: "10px 14px",
-          background: "var(--surface)", border: "1px solid var(--g-line)", borderRadius: 10, marginBottom: 12,
-        }}>
-          <span style={{ fontSize: 13, color: "var(--ink)", fontWeight: 500 }}>
-            {selected.size} selected
-          </span>
-          <span style={{ fontSize: 13, color: "var(--ink-2)" }}>— reassign to:</span>
           <select
-            value={bulkTarget}
-            onChange={e => setBulkTarget(e.target.value)}
-            style={{ padding: "5px 8px", borderRadius: 7, border: "1px solid var(--g-line)", background: "var(--surface)", color: "var(--ink)", fontSize: 13 }}
+            value={catFilter}
+            onChange={e => setCatFilter(e.target.value)}
+            style={{
+              padding: "6px 10px", borderRadius: 8,
+              border: "1px solid var(--g-line)", background: "var(--surface)",
+              color: "var(--ink)", fontSize: 13,
+            }}
           >
-            <option value="">Pick category…</option>
-            {NML_CATEGORIES.map(c => (
-              <option key={c.ar} value={c.ar}>{c.ar} — {c.en}</option>
+            <option value="">All categories</option>
+            {categories.map(c => (
+              <option key={c} value={c}>{c}</option>
             ))}
           </select>
-          <button
-            className="pill dark"
-            onClick={bulkReassign}
-            disabled={!bulkTarget || bulkSaving}
-            style={{ fontSize: 12 }}
-          >
-            {bulkSaving ? "Saving…" : "Apply"}
-          </button>
-          <button
-            className="pill outline"
-            onClick={() => setSelected(new Set())}
-            style={{ fontSize: 12 }}
-          >
-            Cancel
-          </button>
         </div>
-      )}
+      </div>
 
       {/* Table */}
       <div style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
             <tr style={{ borderBottom: "1px solid var(--g-line)" }}>
-              <th style={{ width: 36, padding: "8px 10px", textAlign: "left" }}>
-                <input
-                  type="checkbox"
-                  checked={selected.size === rows.length && rows.length > 0}
-                  onChange={toggleAll}
-                />
-              </th>
-              <th style={{ padding: "8px 10px", textAlign: "left", color: "var(--ink-2)", fontWeight: 500 }}>Raw category</th>
+              <th style={{ padding: "8px 10px", textAlign: "left", color: "var(--ink-2)", fontWeight: 500 }}>Category</th>
+              <th style={{ padding: "8px 10px", textAlign: "left", color: "var(--ink-2)", fontWeight: 500 }}>Subcategory</th>
               <th style={{ padding: "8px 10px", textAlign: "right", color: "var(--ink-2)", fontWeight: 500, whiteSpace: "nowrap" }}>Products</th>
-              <th style={{ padding: "8px 10px", textAlign: "left", color: "var(--ink-2)", fontWeight: 500, minWidth: 260 }}>Mapped to</th>
-              <th style={{ padding: "8px 10px", textAlign: "left", color: "var(--ink-2)", fontWeight: 500 }}>Confidence</th>
-              <th style={{ padding: "8px 10px", textAlign: "center", color: "var(--ink-2)", fontWeight: 500 }}>Reviewed</th>
+              <th style={{ padding: "8px 10px", textAlign: "left", color: "var(--ink-2)", fontWeight: 500 }}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               Array.from({ length: 8 }).map((_, i) => (
                 <tr key={i}>
-                  {Array.from({ length: 6 }).map((_, j) => (
+                  {Array.from({ length: 4 }).map((_, j) => (
                     <td key={j} style={{ padding: "10px" }}>
-                      <div style={{ height: 14, borderRadius: 6, background: "var(--g-line)", width: j === 1 ? "80%" : j === 3 ? "70%" : "40%" }} />
+                      <div style={{ height: 14, borderRadius: 6, background: "var(--g-line)", width: j === 0 ? "55%" : j === 1 ? "70%" : j === 2 ? "30%" : "20%" }} />
                     </td>
                   ))}
                 </tr>
               ))
             )}
-            {!loading && rows.length === 0 && (
+            {!loading && filtered.length === 0 && (
               <tr>
-                <td colSpan={6} style={{ padding: "40px 0", textAlign: "center", color: "var(--ink-3)", fontSize: 13 }}>
-                  No categories found
+                <td colSpan={4} style={{ padding: "40px 0", textAlign: "center", color: "var(--ink-3)", fontSize: 13 }}>
+                  No subcategories found
                 </td>
               </tr>
             )}
-            {!loading && rows.map(row => {
-              const isSaved = savedFlash === row.raw_category;
-              const isSelected = selected.has(row.raw_category);
+            {!loading && filtered.map(row => {
+              const key = rowKey(row);
+              const isEditing = editingKey === key;
+              const isFlashing = flashKey === key;
               return (
                 <tr
-                  key={row.raw_category}
+                  key={key}
                   style={{
                     borderBottom: "1px solid var(--g-line)",
-                    background: isSelected ? "var(--nml-red-tint, rgba(220,38,38,.05))" : isSaved ? "rgba(34,197,94,.07)" : "transparent",
-                    transition: "background 0.3s",
+                    background: isFlashing ? "rgba(34,197,94,.08)" : "transparent",
+                    transition: "background 0.4s",
                   }}
                 >
-                  <td style={{ padding: "8px 10px" }}>
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      onChange={() => {
-                        setSelected(prev => {
-                          const next = new Set(prev);
-                          if (next.has(row.raw_category)) next.delete(row.raw_category);
-                          else next.add(row.raw_category);
-                          return next;
-                        });
-                      }}
-                    />
+                  <td style={{ padding: "8px 10px", color: "var(--ink)", fontWeight: 500 }}>
+                    {row.nml_category}
                   </td>
-                  <td style={{ padding: "8px 10px", color: "var(--ink)", direction: "rtl", textAlign: "right", maxWidth: 260 }}>
-                    <span title={row.raw_category} style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {row.raw_category}
-                    </span>
+                  <td style={{ padding: "8px 10px", color: "var(--ink)" }}>
+                    {isEditing ? (
+                      <input
+                        autoFocus
+                        value={editingValue}
+                        onChange={e => setEditingValue(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === "Enter") commitEdit(row);
+                          if (e.key === "Escape") cancelEdit();
+                        }}
+                        onBlur={() => commitEdit(row)}
+                        style={{
+                          padding: "3px 7px", borderRadius: 6, fontSize: 13,
+                          border: "1px solid var(--g-line)", background: "var(--surface)",
+                          color: "var(--ink)", width: "100%", maxWidth: 280,
+                        }}
+                      />
+                    ) : (
+                      <span
+                        title="Click to rename"
+                        onClick={() => startEdit(row)}
+                        style={{
+                          cursor: "text",
+                          borderBottom: "1px dashed var(--g-line)",
+                          paddingBottom: 1,
+                          display: "inline-block",
+                        }}
+                      >
+                        {row.nml_subcategory}
+                      </span>
+                    )}
                   </td>
                   <td style={{ padding: "8px 10px", textAlign: "right", color: "var(--ink-2)", fontVariantNumeric: "tabular-nums" }}>
                     {row.product_count.toLocaleString("en-US")}
                   </td>
                   <td style={{ padding: "8px 10px" }}>
-                    <select
-                      value={row.mapped_category ?? ""}
-                      onChange={e => updateRow(row.raw_category, { mapped_category: e.target.value || null })}
-                      style={{
-                        padding: "4px 7px", borderRadius: 7, fontSize: 12,
-                        border: row.mapped_category ? "1px solid var(--g-line)" : "1px solid var(--nml-red, #dc2626)",
-                        background: "var(--surface)", color: row.mapped_category ? "var(--ink)" : "var(--nml-red, #dc2626)",
-                        width: "100%", maxWidth: 280,
-                      }}
-                    >
-                      <option value="">— unmapped —</option>
-                      {NML_CATEGORIES.map(c => (
-                        <option key={c.ar} value={c.ar}>{c.ar} — {c.en}</option>
-                      ))}
-                    </select>
-                  </td>
-                  <td style={{ padding: "8px 10px" }}>
-                    <ConfidenceBadge value={row.confidence} />
-                  </td>
-                  <td style={{ padding: "8px 10px", textAlign: "center" }}>
-                    <input
-                      type="checkbox"
-                      checked={row.reviewed}
-                      onChange={e => updateRow(row.raw_category, { reviewed: e.target.checked })}
-                    />
+                    {!isEditing && (
+                      <button
+                        className="pill outline"
+                        onClick={() => startEdit(row)}
+                        style={{ fontSize: 11, padding: "2px 9px" }}
+                      >
+                        Rename
+                      </button>
+                    )}
                   </td>
                 </tr>
               );
@@ -301,8 +225,6 @@ export default function CategoriesTab() {
           </tbody>
         </table>
       </div>
-
-      <Pagination page={page} total={total} onChange={setPage} />
     </div>
   );
 }

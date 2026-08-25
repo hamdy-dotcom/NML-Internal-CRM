@@ -9,6 +9,7 @@ import EmptyState from "@/components/ui/EmptyState";
 import SkeletonRows from "@/components/ui/SkeletonRows";
 import Pagination, { PAGE_SIZE } from "@/components/ui/Pagination";
 import ProductDrawer from "./ProductDrawer";
+import CategoryFilter, { type CategoryCount } from "@/components/ui/CategoryFilter";
 import { exportProductsCSV } from "./actions";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -19,6 +20,8 @@ interface ProductRow {
   sku: string | null;
   image_url: string | null;
   category: string | null;
+  nml_category: string | null;
+  nml_subcategory: string | null;
   brand: string | null;
   price: number | null;
   sale_price: number | null;
@@ -59,17 +62,21 @@ function MerchantStageBadge({ stage }: { stage: string }) {
 }
 
 interface Filters {
-  merchant: string;
-  stage:    string;
-  category: string;
-  brand:    string;
-  priceMin: string;
-  priceMax: string;
+  merchant:      string;
+  stage:         string;
+  nmlCategory:   string;
+  nmlSubcategory: string;
+  brand:         string;
+  priceMin:      string;
+  priceMax:      string;
 }
 
 const DEFAULT_FILTERS: Filters = {
-  merchant: "", stage: "", category: "", brand: "", priceMin: "", priceMax: "",
+  merchant: "", stage: "", nmlCategory: "", nmlSubcategory: "", brand: "", priceMin: "", priceMax: "",
 };
+
+const OPTIONAL_COLS = ["nml_category"] as const;
+type OptionalCol = typeof OPTIONAL_COLS[number];
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -96,8 +103,8 @@ export default function ProductsTable() {
   const [merchantDropdown, setMerchantDropdown] = useState(false);
   const [brandOptions,     setBrandOptions]     = useState<string[]>([]);
   const [brandDropdown,    setBrandDropdown]    = useState(false);
-  const [categoryOptions,  setCategoryOptions]  = useState<{ value: string; count: number }[]>([]);
-  const [categoryDropdown, setCategoryDropdown] = useState(false);
+  const [visibleCols,      setVisibleCols]      = useState<Set<OptionalCol>>(new Set());
+  const [colsOpen,         setColsOpen]         = useState(false);
 
   // Persist view mode
   useEffect(() => {
@@ -117,20 +124,36 @@ export default function ProductsTable() {
         if (data) setBrandOptions([...new Set(data.map(p => p.brand).filter(Boolean) as string[])]);
       }
     );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const loadCategories = useCallback(async (): Promise<CategoryCount[]> => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (supabase.from("product_categories") as any)
-      .select("mapped_category, product_count")
-      .not("mapped_category", "is", null)
-      .order("product_count", { ascending: false })
-      .then(({ data }: { data: Array<{ mapped_category: string; product_count: number }> | null }) => {
-        if (data) setCategoryOptions(data.map(r => ({ value: r.mapped_category, count: r.product_count })));
-      });
+    const { data } = await (supabase.from("v_nml_category_counts") as any)
+      .select("nml_category, product_count")
+      .order("product_count", { ascending: false });
+    return ((data ?? []) as { nml_category: string; product_count: number }[])
+      .map(r => ({ value: r.nml_category, count: r.product_count }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const loadSubcategories = useCallback(async (cat: string): Promise<CategoryCount[]> => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data } = await (supabase.from("v_nml_subcategory_counts") as any)
+      .select("nml_subcategory, product_count")
+      .eq("nml_category", cat)
+      .order("product_count", { ascending: false });
+    return ((data ?? []) as { nml_subcategory: string; product_count: number }[])
+      .map(r => ({ value: r.nml_subcategory, count: r.product_count }));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const setView = (v: "table" | "grid") => {
     setViewMode(v); localStorage.setItem("products-view", v);
   };
+
+  const toggleCol = (col: OptionalCol) =>
+    setVisibleCols(prev => { const n = new Set(prev); n.has(col) ? n.delete(col) : n.add(col); return n; });
 
   const filterCount = Object.values(filters).filter(v => v !== "").length;
 
@@ -168,11 +191,12 @@ export default function ProductsTable() {
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let q = (supabase.from("products") as any)
-        .select("id, name, sku, image_url, category, brand, price, sale_price, nml_cost, stock, status, source, created_at, merchant_id", { count: "exact" });
+        .select("id, name, sku, image_url, category, nml_category, nml_subcategory, brand, price, sale_price, nml_cost, stock, status, source, created_at, merchant_id", { count: "exact" });
 
-      if (merchantIdFilter)   q = q.in("merchant_id", merchantIdFilter);
-      if (filters.category)   q = q.eq("category_mapped", filters.category);
-      if (filters.brand)      q = q.ilike("brand", `%${filters.brand}%`);
+      if (merchantIdFilter)        q = q.in("merchant_id", merchantIdFilter);
+      if (filters.nmlCategory)     q = q.eq("nml_category", filters.nmlCategory);
+      if (filters.nmlSubcategory)  q = q.eq("nml_subcategory", filters.nmlSubcategory);
+      if (filters.brand)           q = q.ilike("brand", `%${filters.brand}%`);
       if (filters.priceMin)   q = q.gte("price", filters.priceMin);
       if (filters.priceMax)   q = q.lte("price", filters.priceMax);
 
@@ -263,48 +287,6 @@ export default function ProductsTable() {
     } catch (e) { toast.error((e as Error).message); }
   };
 
-  // ── Category combobox (value/label pairs with counts) ────────────────────
-  function CategoryCombobox() {
-    const typed = filters.category;
-    const visible = categoryOptions
-      .filter(o => !typed || o.value.toLowerCase().includes(typed.toLowerCase()))
-      .slice(0, 25);
-    return (
-      <div style={{ position: "relative" }}>
-        <label className="field-label">Category</label>
-        <input
-          className="field"
-          type="text"
-          placeholder="Search category…"
-          value={typed}
-          dir="rtl"
-          onChange={e => { setFilters(f => ({ ...f, category: e.target.value })); setCategoryDropdown(true); }}
-          onFocus={() => setCategoryDropdown(true)}
-          onBlur={() => setTimeout(() => setCategoryDropdown(false), 150)}
-        />
-        {categoryDropdown && visible.length > 0 && (
-          <div style={{
-            position: "absolute", top: "100%", left: 0, right: 0, zIndex: 50,
-            background: "rgba(255,255,255,.97)", border: "1px solid var(--g-line)",
-            borderRadius: 10, boxShadow: "0 8px 24px rgba(40,60,110,.12)",
-            maxHeight: 220, overflowY: "auto",
-          }}>
-            {visible.map(o => (
-              <div
-                key={o.value}
-                style={{ padding: "8px 12px", cursor: "pointer", fontSize: 12.5, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}
-                onMouseDown={() => { setFilters(f => ({ ...f, category: o.value })); setCategoryDropdown(false); }}
-              >
-                <span dir="rtl">{o.value}</span>
-                <span style={{ color: "var(--ink-3)", fontSize: 11, flexShrink: 0 }}>{o.count.toLocaleString("en-US")}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  }
-
   // ── Combobox helper ───────────────────────────────────────────────────────
   function Combobox({
     label, value, options, open, placeholder,
@@ -368,6 +350,35 @@ export default function ProductsTable() {
               </button>
             ))}
           </div>
+          {/* Optional columns toggle */}
+          <div style={{ position: "relative" }}>
+            <button
+              className={`pill${visibleCols.size > 0 ? " active" : " outline"}`}
+              onClick={() => setColsOpen(o => !o)}
+            >
+              Columns{visibleCols.size > 0 ? ` · ${visibleCols.size}` : ""}
+            </button>
+            {colsOpen && (
+              <div style={{
+                position: "absolute", right: 0, top: "100%", marginTop: 4, zIndex: 50,
+                background: "var(--surface, #fff)", border: "1px solid var(--g-line)",
+                borderRadius: 10, boxShadow: "0 8px 24px rgba(40,60,110,.12)",
+                padding: "8px 0", minWidth: 180,
+              }}
+                onMouseLeave={() => setColsOpen(false)}
+              >
+                {OPTIONAL_COLS.map(col => {
+                  const labels: Record<OptionalCol, string> = { nml_category: "NML Category" };
+                  return (
+                    <label key={col} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 14px", cursor: "pointer", fontSize: 13 }}>
+                      <input type="checkbox" checked={visibleCols.has(col)} onChange={() => toggleCol(col)} style={{ cursor: "pointer" }} />
+                      {labels[col]}
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+          </div>
           <button className={`pill${filtersOpen ? " active" : " outline"}`} onClick={() => setFiltersOpen(o => !o)}>
             {filterCount > 0 ? `Filters · ${filterCount}` : "Filters"}
           </button>
@@ -401,8 +412,16 @@ export default function ProductsTable() {
             </select>
           </div>
 
-          {/* Category */}
-          <CategoryCombobox />
+          {/* Category + Subcategory */}
+          <div style={{ gridColumn: "1 / -1" }}>
+            <CategoryFilter
+              nmlCategory={filters.nmlCategory}
+              nmlSubcategory={filters.nmlSubcategory}
+              onChange={(cat, sub) => setFilters(f => ({ ...f, nmlCategory: cat, nmlSubcategory: sub }))}
+              loadCategories={loadCategories}
+              loadSubcategories={loadSubcategories}
+            />
+          </div>
 
           {/* Brand combobox */}
           <Combobox
@@ -472,7 +491,7 @@ export default function ProductsTable() {
                 <th>Name</th>
                 <th>Merchant</th>
                 <th>Merchant stage</th>
-                <th>Category</th>
+                {visibleCols.has("nml_category") && <th>NML Category</th>}
                 <th>Price</th>
                 <th>Sale price</th>
                 <th>Stock</th>
@@ -517,7 +536,9 @@ export default function ProductsTable() {
                     </a>
                   </td>
                   <td><MerchantStageBadge stage={p.merchants.stage} /></td>
-                  <td><span className="sub">{p.category || "—"}</span></td>
+                  {visibleCols.has("nml_category") && (
+                    <td><span className="sub" dir="rtl">{p.nml_category || "—"}</span></td>
+                  )}
                   <td><span className="num">{p.price ? `SAR ${Number(p.price).toLocaleString()}` : "—"}</span></td>
                   <td><span className="num">{p.sale_price ? `SAR ${Number(p.sale_price).toLocaleString()}` : "—"}</span></td>
                   <td><span className="num">{p.stock ?? "—"}</span></td>

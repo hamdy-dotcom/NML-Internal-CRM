@@ -17,42 +17,58 @@ async function getShelfReadyMerchantIds(): Promise<string[] | null> {
   return ((data ?? []) as { id: string }[]).map(m => m.id);
 }
 
-// GET /api/catalogue?search=&category=&merchant_id=&page=0
-// GET /api/catalogue?type=categories
+// GET /api/catalogue?search=&nml_category=&nml_subcategory=&merchant_ids=&page=0
+// GET /api/catalogue?type=nml-categories
+// GET /api/catalogue?type=nml-subcategories&category=X
 // GET /api/catalogue?type=merchants
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = req.nextUrl;
+    const type = searchParams.get("type");
 
     const merchantIds = await getShelfReadyMerchantIds();
     if (!merchantIds) return NextResponse.json({ error: "Failed to resolve merchant list" }, { status: 500 });
 
-    // ── Category list ────────────────────────────────────────────────────────
-    if (searchParams.get("type") === "categories") {
+    // ── NML category list ────────────────────────────────────────────────────
+    if (type === "nml-categories") {
       if (!merchantIds.length) return NextResponse.json({ categories: [] });
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (adminClient.from("products") as any)
-        .select("category_mapped")
-        .in("merchant_id", merchantIds)
-        .not("category_mapped", "is", null);
+      const { data } = await (adminClient.from("v_nml_category_counts") as any)
+        .select("nml_category, product_count")
+        .order("product_count", { ascending: false });
 
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({
+        categories: ((data ?? []) as { nml_category: string; product_count: number }[]).map(r => ({
+          value: r.nml_category,
+          count: r.product_count,
+        })),
+      });
+    }
 
-      const seen = new Set<string>();
-      for (const row of ((data ?? []) as { category_mapped: string }[])) {
-        seen.add(row.category_mapped);
-      }
-      const categories = [...seen].sort((a, b) => a.localeCompare(b, "ar"));
-      return NextResponse.json({ categories });
+    // ── NML subcategory list ─────────────────────────────────────────────────
+    if (type === "nml-subcategories") {
+      const category = searchParams.get("category") ?? "";
+      if (!category) return NextResponse.json({ subcategories: [] });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data } = await (adminClient.from("v_nml_subcategory_counts") as any)
+        .select("nml_subcategory, product_count")
+        .eq("nml_category", category)
+        .order("product_count", { ascending: false });
+
+      return NextResponse.json({
+        subcategories: ((data ?? []) as { nml_subcategory: string; product_count: number }[]).map(r => ({
+          value: r.nml_subcategory,
+          count: r.product_count,
+        })),
+      });
     }
 
     // ── Merchant list — all shelf-ready merchants, sorted by name ────────────
-    if (searchParams.get("type") === "merchants") {
+    if (type === "merchants") {
       if (!merchantIds.length) return NextResponse.json({ merchants: [] });
 
-      // Query merchants table directly — avoids the products scan that hits
-      // Supabase's 1000-row default cap and misses most merchants.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: mData } = await (adminClient.from("merchants") as any)
         .select("id, store_name")
@@ -68,27 +84,28 @@ export async function GET(req: NextRequest) {
     }
 
     // ── Product listing ──────────────────────────────────────────────────────
-    const search      = searchParams.get("search") ?? "";
-    const category    = searchParams.get("category") ?? "";
+    const search        = searchParams.get("search") ?? "";
+    const nmlCategory   = searchParams.get("nml_category") ?? "";
+    const nmlSubcategory = searchParams.get("nml_subcategory") ?? "";
     const merchantIdsParam = (searchParams.get("merchant_ids") ?? "")
       .split(",").map(s => s.trim()).filter(Boolean);
-    const page        = Math.max(0, parseInt(searchParams.get("page") ?? "0", 10));
+    const page = Math.max(0, parseInt(searchParams.get("page") ?? "0", 10));
 
     if (!merchantIds.length) {
       return NextResponse.json({ products: [], total: 0, page });
     }
 
-    // Explicit column allowlist — include url (Salla link) and merchant join for store_name
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let q = (adminClient.from("products") as any)
       .select(
-        "id, name, image_url, images, category_mapped, price, description, url, merchant_id, merchants!merchant_id(store_name)",
+        "id, name, image_url, images, nml_category, nml_subcategory, price, description, url, merchant_id, merchants!merchant_id(store_name)",
         { count: "exact" },
       )
       .in("merchant_id", merchantIds);
 
-    if (search)                q = q.ilike("name", `%${search}%`);
-    if (category)              q = q.eq("category_mapped", category);
+    if (search)              q = q.ilike("name", `%${search}%`);
+    if (nmlCategory)         q = q.eq("nml_category", nmlCategory);
+    if (nmlSubcategory)      q = q.eq("nml_subcategory", nmlSubcategory);
     if (merchantIdsParam.length) q = q.in("merchant_id", merchantIdsParam);
 
     const from = page * PAGE_SIZE;
@@ -99,7 +116,6 @@ export async function GET(req: NextRequest) {
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    // Flatten merchant join → merchant_name
     const products = ((data ?? []) as Array<Record<string, unknown>>).map(p => {
       const { merchants, ...rest } = p as { merchants: { store_name: string } | null } & Record<string, unknown>;
       return { ...rest, merchant_name: merchants?.store_name ?? null };
