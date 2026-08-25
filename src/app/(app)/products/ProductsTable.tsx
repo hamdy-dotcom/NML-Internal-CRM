@@ -61,13 +61,14 @@ function MerchantStageBadge({ stage }: { stage: string }) {
 interface Filters {
   merchant: string;
   stage:    string;
+  category: string;
   brand:    string;
   priceMin: string;
   priceMax: string;
 }
 
 const DEFAULT_FILTERS: Filters = {
-  merchant: "", stage: "", brand: "", priceMin: "", priceMax: "",
+  merchant: "", stage: "", category: "", brand: "", priceMin: "", priceMax: "",
 };
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -81,7 +82,7 @@ export default function ProductsTable() {
 
   const [viewMode,         setViewMode]         = useState<"table" | "grid">("table");
   const [filters,          setFilters]          = useState<Filters>(DEFAULT_FILTERS);
-  const [filtersOpen,      setFiltersOpen]      = useState(false);
+  const [filtersOpen,      setFiltersOpen]      = useState(true);
   const [products,         setProducts]         = useState<ProductRow[]>([]);
   const [loading,          setLoading]          = useState(true);
   const [selected,         setSelected]         = useState<Set<string>>(new Set());
@@ -95,6 +96,8 @@ export default function ProductsTable() {
   const [merchantDropdown, setMerchantDropdown] = useState(false);
   const [brandOptions,     setBrandOptions]     = useState<string[]>([]);
   const [brandDropdown,    setBrandDropdown]    = useState(false);
+  const [categoryOptions,  setCategoryOptions]  = useState<{ value: string; count: number }[]>([]);
+  const [categoryDropdown, setCategoryDropdown] = useState(false);
 
   // Persist view mode
   useEffect(() => {
@@ -102,7 +105,7 @@ export default function ProductsTable() {
     if (saved === "grid" || saved === "table") setViewMode(saved);
   }, []);
 
-  // Load merchant + brand options for comboboxes
+  // Load merchant + brand + category options for comboboxes
   useEffect(() => {
     supabase.from("merchants").select("store_name").order("store_name").then(
       ({ data }: { data: Array<{ store_name: string }> | null }) => {
@@ -114,6 +117,14 @@ export default function ProductsTable() {
         if (data) setBrandOptions([...new Set(data.map(p => p.brand).filter(Boolean) as string[])]);
       }
     );
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase.from("product_categories") as any)
+      .select("mapped_category, product_count")
+      .not("mapped_category", "is", null)
+      .order("product_count", { ascending: false })
+      .then(({ data }: { data: Array<{ mapped_category: string; product_count: number }> | null }) => {
+        if (data) setCategoryOptions(data.map(r => ({ value: r.mapped_category, count: r.product_count })));
+      });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -159,10 +170,11 @@ export default function ProductsTable() {
       let q = (supabase.from("products") as any)
         .select("id, name, sku, image_url, category, brand, price, sale_price, nml_cost, stock, status, source, created_at, merchant_id", { count: "exact" });
 
-      if (merchantIdFilter) q = q.in("merchant_id", merchantIdFilter);
-      if (filters.brand)    q = q.ilike("brand", `%${filters.brand}%`);
-      if (filters.priceMin) q = q.gte("price", filters.priceMin);
-      if (filters.priceMax) q = q.lte("price", filters.priceMax);
+      if (merchantIdFilter)   q = q.in("merchant_id", merchantIdFilter);
+      if (filters.category)   q = q.eq("category_mapped", filters.category);
+      if (filters.brand)      q = q.ilike("brand", `%${filters.brand}%`);
+      if (filters.priceMin)   q = q.gte("price", filters.priceMin);
+      if (filters.priceMax)   q = q.lte("price", filters.priceMax);
 
       const from = page * PAGE_SIZE;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -250,6 +262,48 @@ export default function ProductsTable() {
       URL.revokeObjectURL(url);
     } catch (e) { toast.error((e as Error).message); }
   };
+
+  // ── Category combobox (value/label pairs with counts) ────────────────────
+  function CategoryCombobox() {
+    const typed = filters.category;
+    const visible = categoryOptions
+      .filter(o => !typed || o.value.toLowerCase().includes(typed.toLowerCase()))
+      .slice(0, 25);
+    return (
+      <div style={{ position: "relative" }}>
+        <label className="field-label">Category</label>
+        <input
+          className="field"
+          type="text"
+          placeholder="Search category…"
+          value={typed}
+          dir="rtl"
+          onChange={e => { setFilters(f => ({ ...f, category: e.target.value })); setCategoryDropdown(true); }}
+          onFocus={() => setCategoryDropdown(true)}
+          onBlur={() => setTimeout(() => setCategoryDropdown(false), 150)}
+        />
+        {categoryDropdown && visible.length > 0 && (
+          <div style={{
+            position: "absolute", top: "100%", left: 0, right: 0, zIndex: 50,
+            background: "rgba(255,255,255,.97)", border: "1px solid var(--g-line)",
+            borderRadius: 10, boxShadow: "0 8px 24px rgba(40,60,110,.12)",
+            maxHeight: 220, overflowY: "auto",
+          }}>
+            {visible.map(o => (
+              <div
+                key={o.value}
+                style={{ padding: "8px 12px", cursor: "pointer", fontSize: 12.5, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}
+                onMouseDown={() => { setFilters(f => ({ ...f, category: o.value })); setCategoryDropdown(false); }}
+              >
+                <span dir="rtl">{o.value}</span>
+                <span style={{ color: "var(--ink-3)", fontSize: 11, flexShrink: 0 }}>{o.count.toLocaleString("en-US")}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   // ── Combobox helper ───────────────────────────────────────────────────────
   function Combobox({
@@ -346,6 +400,9 @@ export default function ProductsTable() {
               ))}
             </select>
           </div>
+
+          {/* Category */}
+          <CategoryCombobox />
 
           {/* Brand combobox */}
           <Combobox

@@ -8,38 +8,29 @@ interface NavItem {
   label: string;
   icon: string;
   roles?: UserRole[];
-  badge?: number;
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { href: "/",            label: "Dashboard",   icon: "⊞" },
-  { href: "/leads",       label: "Leads",        icon: "⬇", roles: ["admin","acq_manager","acq_specialist"] },
-  { href: "/merchants",   label: "Merchants",    icon: "🏪" },
-  { href: "/pipeline",    label: "Pipeline",     icon: "≡", roles: ["admin","acq_manager","acq_specialist"] },
-  { href: "/onboarding",  label: "Onboarding",   icon: "✓", roles: ["admin","acq_manager","account_manager"] },
-  { href: "/products",    label: "Products",     icon: "📦", roles: ["admin","acq_manager","account_manager","catalog_ops"] },
-  { href: "/extraction",  label: "Extraction",   icon: "⬇", roles: ["admin","acq_manager","account_manager","catalog_ops"] },
-  { href: "/faq",         label: "FAQ",           icon: "?" },
-  { href: "/settings",    label: "Settings",     icon: "⚙", roles: ["admin"] },
+  { href: "/",            label: "Dashboard",  icon: "⊞" },
+  { href: "/leads",       label: "Leads",       icon: "⬇", roles: ["admin","acq_manager","acq_specialist"] },
+  { href: "/merchants",   label: "Merchants",   icon: "🏪" },
+  { href: "/pipeline",    label: "Pipeline",    icon: "≡", roles: ["admin","acq_manager","acq_specialist"] },
+  { href: "/onboarding",  label: "Onboarding",  icon: "✓", roles: ["admin","acq_manager","account_manager"] },
+  { href: "/products",    label: "Products",    icon: "📦", roles: ["admin","acq_manager","account_manager","catalog_ops"] },
+  { href: "/extraction",  label: "Extraction",  icon: "⬇", roles: ["admin","acq_manager","account_manager","catalog_ops"] },
+  { href: "/faq",         label: "FAQ",          icon: "?" },
+  { href: "/settings",    label: "Settings",    icon: "⚙", roles: ["admin"] },
 ];
 
 interface Props {
   role: UserRole;
   collapsed?: boolean;
   onToggle?: () => void;
-  leadCount?: number;
-  productCount?: number;
 }
 
-export default function Sidebar({ role, collapsed = false, onToggle, leadCount, productCount }: Props) {
+export default function Sidebar({ role, collapsed = false, onToggle }: Props) {
   const pathname = usePathname();
-
   const visible = NAV_ITEMS.filter(item => !item.roles || item.roles.includes(role));
-
-  const badges: Record<string, number | undefined> = {
-    "/leads":    leadCount,
-    "/products": productCount,
-  };
 
   return (
     <nav
@@ -62,7 +53,6 @@ export default function Sidebar({ role, collapsed = false, onToggle, leadCount, 
       <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
         {visible.map(item => {
           const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
-          const badge = badges[item.href];
           return (
             <Link key={item.href} href={item.href} style={{ textDecoration: "none" }}>
               <div
@@ -84,16 +74,7 @@ export default function Sidebar({ role, collapsed = false, onToggle, leadCount, 
                 <span style={{ fontSize: 15, color: active ? "var(--nml-red)" : "var(--ink-3)", flexShrink: 0, fontFamily: "system-ui" }}>
                   {item.icon}
                 </span>
-                {!collapsed && (
-                  <>
-                    <span style={{ flex: 1 }}>{item.label}</span>
-                    {badge != null && badge > 0 && (
-                      <span style={{ fontSize: 10.5, background: active ? "var(--nml-red)" : "var(--blue)", color: "#fff", borderRadius: 99, padding: "1px 6px", fontWeight: 600, fontFamily: "JetBrains Mono, monospace" }}>
-                        {badge}
-                      </span>
-                    )}
-                  </>
-                )}
+                {!collapsed && <span style={{ flex: 1 }}>{item.label}</span>}
               </div>
             </Link>
           );

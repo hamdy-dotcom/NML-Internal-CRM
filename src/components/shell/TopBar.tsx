@@ -13,7 +13,6 @@ interface Props {
 
 export default function TopBar({ profile, title }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
   const supabase = createClient();
   const router = useRouter();
 
@@ -29,17 +28,7 @@ export default function TopBar({ profile, title }: Props) {
   const color = colors[(profile.full_name ?? "").charCodeAt(0) % colors.length] ?? "#3f7fd6";
 
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px 10px 0" }}>
-      {/* Global search */}
-      <div
-        onClick={() => setSearchOpen(true)}
-        style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, padding: "8px 15px", borderRadius: "999px", background: "rgba(255,255,255,.6)", border: "1px solid var(--g-line)", color: "var(--ink-3)", fontSize: 13, cursor: "text" }}
-      >
-        <span>🔍</span>
-        <span>Search merchants, products, tasks…</span>
-        <span style={{ marginInlineStart: "auto", fontSize: 11, border: "1px solid var(--g-line)", borderRadius: 6, padding: "1px 6px", fontFamily: "JetBrains Mono, monospace" }}>⌘K</span>
-      </div>
-
+    <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px 10px 0", justifyContent: "flex-end" }}>
       <NotificationBell userId={profile.id} />
 
       {/* Avatar / menu */}
@@ -70,7 +59,6 @@ export default function TopBar({ profile, title }: Props) {
       </div>
 
       {menuOpen && <div style={{ position: "fixed", inset: 0, zIndex: 40 }} onClick={() => setMenuOpen(false)} />}
-      {searchOpen && <div style={{ position: "fixed", inset: 0, zIndex: 40 }} onClick={() => setSearchOpen(false)} />}
     </div>
   );
 }

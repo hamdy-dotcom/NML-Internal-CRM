@@ -6,6 +6,7 @@ import TeamsTab from "./TeamsTab";
 import FormTemplatesTab from "./FormTemplatesTab";
 import OnboardingTemplatesTab from "./OnboardingTemplatesTab";
 import LookupsTab from "./LookupsTab";
+import CategoriesTab from "./CategoriesTab";
 
 const TABS = [
   { key: "users", label: "Users" },
@@ -13,6 +14,7 @@ const TABS = [
   { key: "forms", label: "Form templates" },
   { key: "onboarding", label: "Onboarding templates" },
   { key: "lookups", label: "Lookups" },
+  { key: "categories", label: "Categories" },
 ] as const;
 
 type Tab = typeof TABS[number]["key"];
@@ -63,6 +65,7 @@ export default async function SettingsPage({ searchParams }: Props) {
       {tab === "forms" && <FormTemplatesTab currentRole={role} />}
       {tab === "onboarding" && <OnboardingTemplatesTab currentRole={role} />}
       {tab === "lookups" && <LookupsTab currentRole={role} />}
+      {tab === "categories" && <CategoriesTab />}
     </div>
   );
 }

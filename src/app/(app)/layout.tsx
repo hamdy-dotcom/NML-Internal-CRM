@@ -14,12 +14,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // Force password change on first login
   if ((profile as Record<string, unknown>).must_change_password) redirect("/auth/update-password");
 
-  // Badge counts
-  const [{ count: leadCount }, { count: productCount }] = await Promise.all([
-    supabase.from("merchants").select("*", { count: "exact", head: true }).eq("stage", "new"),
-    supabase.from("products").select("*", { count: "exact", head: true }).eq("status", "ready_for_shelf"),
-  ]);
-
   return (
     <div style={{ minHeight: "100vh", background: "var(--wallpaper)", backgroundAttachment: "fixed", display: "flex" }}>
       {/* Blobs behind everything */}
@@ -30,11 +24,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
       {/* Glass window */}
       <div className="glass-win" style={{ position: "relative", zIndex: 1, margin: 12, flex: 1, display: "flex", minHeight: "calc(100vh - 24px)", backdropFilter: "var(--blur)", WebkitBackdropFilter: "var(--blur)" }}>
-        <Sidebar
-          role={profile.role}
-          leadCount={leadCount ?? 0}
-          productCount={productCount ?? 0}
-        />
+        <Sidebar role={profile.role} />
 
         <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, borderInlineStart: "1px solid var(--g-line)" }}>
           <TopBar profile={profile} />
