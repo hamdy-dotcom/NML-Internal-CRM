@@ -379,6 +379,15 @@ export interface VSpecialistPerformance {
   avg_days_to_contact: string | null;
 }
 
+export interface ProductCategory {
+  raw_category:    string;
+  mapped_category: string | null;
+  product_count:   number;
+  confidence:      string | null;
+  reviewed:        boolean;
+  updated_at:      string;
+}
+
 // Helper — makes all columns optional for Insert/Update while keeping Row exact.
 // Intersection with Record<string,unknown> gives each Row/Insert/Update an index
 // signature so the type satisfies Supabase's GenericTable constraint.
@@ -414,6 +423,7 @@ export type Database = {
       audit_log:                  TableDef<AuditLog>;
       notifications:              TableDef<Notification>;
       lookups:                    TableDef<Lookup>;
+      product_categories:         TableDef<ProductCategory>;
     };
     Views: {
       v_merchants_list:         { Row: VMerchantList         & Record<string, unknown>; Relationships: never[] };

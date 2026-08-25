@@ -93,7 +93,7 @@ Return a JSON array with exactly ${batch.length} objects:
   const results = JSON.parse(match[0]) as MappingResult[];
 
   // Validate mapped values are in taxonomy
-  const validCategories = new Set(NML_CATEGORIES.map(c => c.ar));
+  const validCategories: Set<string> = new Set(NML_CATEGORIES.map(c => c.ar));
   for (const r of results) {
     if (r.mapped && !validCategories.has(r.mapped)) {
       console.warn(`  ⚠ Unknown category "${r.mapped}" for "${r.raw}" — setting to null`);
