@@ -30,6 +30,8 @@ export async function proxy(request: NextRequest) {
   if (
     pathname.startsWith("/f/") ||
     pathname.startsWith("/api/form-submit") ||
+    pathname.startsWith("/catalogue") ||
+    pathname.startsWith("/api/catalogue") ||
     pathname === "/login" ||
     pathname.startsWith("/auth/")
   ) {
