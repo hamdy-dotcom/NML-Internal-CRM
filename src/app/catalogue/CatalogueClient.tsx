@@ -1,5 +1,6 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import CatalogueProductModal from "./CatalogueProductModal";
 import CategoryFilter, { type CategoryCount } from "@/components/ui/CategoryFilter";
 
@@ -36,15 +37,36 @@ function MerchantMultiSelect({
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const containerRef = useRef<HTMLDivElement>(null);
+  const wrapRef   = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const panelRef  = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
 
+  // Measure trigger on open
+  useLayoutEffect(() => {
+    if (open && buttonRef.current) {
+      const r = buttonRef.current.getBoundingClientRect();
+      setPos({ top: r.bottom + 4, left: r.left, width: r.width });
+    }
+  }, [open]);
+
+  // Close on outside click — checks both the wrapper and portalled panel
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      if (!wrapRef.current?.contains(t) && !panelRef.current?.contains(t)) setOpen(false);
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  // Close on scroll so panel doesn't drift
+  useEffect(() => {
+    if (!open) return;
+    const handler = () => setOpen(false);
+    window.addEventListener("scroll", handler, { passive: true, capture: true });
+    return () => window.removeEventListener("scroll", handler, { capture: true });
   }, [open]);
 
   const filtered = options.filter(o =>
@@ -55,74 +77,80 @@ function MerchantMultiSelect({
     if (next.has(id)) next.delete(id); else next.add(id);
     onChange(next);
   };
-  const label = selected.size === 0
+  const displayLabel = selected.size === 0
     ? "All merchants"
     : selected.size === 1
     ? (options.find(o => o.id === [...selected][0])?.name ?? "1 merchant")
     : `${selected.size} merchants`;
 
+  const panel = open && pos ? createPortal(
+    <div ref={panelRef} style={{
+      position: "fixed", top: pos.top, left: pos.left, width: Math.max(pos.width, 220),
+      zIndex: 9999, background: "rgba(255,255,255,.99)", border: "1px solid var(--g-line)",
+      borderRadius: 12, boxShadow: "0 12px 32px rgba(40,60,110,.16)",
+      display: "flex", flexDirection: "column", maxHeight: 300,
+    }}>
+      <div style={{ padding: "10px 12px 8px", borderBottom: "1px solid rgba(0,0,0,.06)", flexShrink: 0 }}>
+        <input autoFocus type="text" placeholder="Filter merchants…" value={search}
+          onChange={e => setSearch(e.target.value)}
+          style={{ width: "100%", padding: "6px 10px", borderRadius: 8, border: "1px solid var(--g-line)", background: "#f5f6f8", fontSize: 12.5, boxSizing: "border-box", outline: "none" }} />
+      </div>
+      {selected.size > 0 && (
+        <div style={{ padding: "8px 14px", fontSize: 12.5, color: "#b91c1c", cursor: "pointer", fontWeight: 500, flexShrink: 0, borderBottom: "1px solid rgba(0,0,0,.04)" }}
+          onMouseDown={e => { e.preventDefault(); onChange(new Set()); setOpen(false); }}>
+          Clear all ({selected.size} selected)
+        </div>
+      )}
+      <div style={{ overflowY: "auto", flex: 1 }}>
+        {filtered.length === 0
+          ? <div style={{ padding: "12px 14px", fontSize: 12.5, color: "var(--ink-3)" }}>No matches</div>
+          : filtered.map(o => {
+              const checked = selected.has(o.id);
+              return (
+                <div key={o.id} onMouseDown={e => { e.preventDefault(); toggle(o.id); }}
+                  style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 14px", cursor: "pointer", fontSize: 13, borderBottom: "1px solid rgba(0,0,0,.03)", background: checked ? "rgba(220,38,38,.05)" : "transparent" }}>
+                  <div style={{ width: 16, height: 16, borderRadius: 4, flexShrink: 0, border: checked ? "none" : "1.5px solid #c5cdd8", background: checked ? "#dc2626" : "transparent", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    {checked && <span style={{ color: "#fff", fontSize: 10, lineHeight: 1 }}>✓</span>}
+                  </div>
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o.name}</span>
+                </div>
+              );
+            })
+        }
+      </div>
+    </div>,
+    document.body
+  ) : null;
+
   return (
-    <div ref={containerRef} style={{ flex: "1 1 200px", minWidth: 160, position: "relative" }}>
+    <div ref={wrapRef} style={{ flex: "1 1 150px", minWidth: 130, position: "relative" }}>
       <label style={{ display: "block", fontSize: 11.5, fontWeight: 500, color: "var(--ink-3)", marginBottom: 5, textTransform: "uppercase", letterSpacing: ".06em" }}>
         Merchant
       </label>
-      <button
-        onClick={() => setOpen(o => !o)}
-        style={{
-          width: "100%", padding: "9px 32px 9px 14px", borderRadius: 10,
-          border: "1px solid var(--g-line)",
-          background: selected.size > 0 ? "rgba(220,38,38,.06)" : "rgba(255,255,255,.7)",
-          color: selected.size > 0 ? "#b91c1c" : "var(--ink-3)",
-          fontSize: 13, textAlign: "left", cursor: "pointer",
-          display: "flex", alignItems: "center", justifyContent: "space-between", boxSizing: "border-box",
-        }}
-      >
-        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
-        <span style={{ fontSize: 10, opacity: .6, flexShrink: 0, marginLeft: 6 }}>{open ? "▲" : "▼"}</span>
-      </button>
-      {selected.size > 0 && (
-        <button onClick={() => onChange(new Set())}
-          style={{ position: "absolute", right: 28, top: "calc(50% + 10px)", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "var(--ink-3)", fontSize: 16, lineHeight: 1, padding: 2 }}>
-          ×
+      <div style={{ position: "relative" }}>
+        <button
+          ref={buttonRef}
+          onClick={() => setOpen(o => !o)}
+          style={{
+            width: "100%", padding: "8px 32px 8px 12px", borderRadius: 8,
+            border: "1px solid var(--g-line)",
+            background: selected.size > 0 ? "rgba(220,38,38,.06)" : "rgba(255,255,255,.7)",
+            color: selected.size > 0 ? "#b91c1c" : "var(--ink-3)",
+            fontSize: 13, textAlign: "left", cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "space-between", boxSizing: "border-box",
+          }}
+        >
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{displayLabel}</span>
+          <span style={{ fontSize: 10, opacity: .6, flexShrink: 0, marginLeft: 6 }}>{open ? "▲" : "▼"}</span>
         </button>
-      )}
-      {open && (
-        <div style={{
-          position: "absolute", top: "100%", left: 0, right: 0, zIndex: 50, marginTop: 4,
-          background: "rgba(255,255,255,.99)", border: "1px solid var(--g-line)",
-          borderRadius: 12, boxShadow: "0 12px 32px rgba(40,60,110,.16)",
-          display: "flex", flexDirection: "column", maxHeight: 300,
-        }}>
-          <div style={{ padding: "10px 12px 8px", borderBottom: "1px solid rgba(0,0,0,.06)", flexShrink: 0 }}>
-            <input autoFocus type="text" placeholder="Filter merchants…" value={search}
-              onChange={e => setSearch(e.target.value)}
-              style={{ width: "100%", padding: "6px 10px", borderRadius: 8, border: "1px solid var(--g-line)", background: "#f5f6f8", fontSize: 12.5, boxSizing: "border-box", outline: "none" }} />
-          </div>
-          {selected.size > 0 && (
-            <div style={{ padding: "8px 14px", fontSize: 12.5, color: "#b91c1c", cursor: "pointer", fontWeight: 500, flexShrink: 0, borderBottom: "1px solid rgba(0,0,0,.04)" }}
-              onMouseDown={e => { e.preventDefault(); onChange(new Set()); }}>
-              Clear all ({selected.size} selected)
-            </div>
-          )}
-          <div style={{ overflowY: "auto", flex: 1 }}>
-            {filtered.length === 0
-              ? <div style={{ padding: "12px 14px", fontSize: 12.5, color: "var(--ink-3)" }}>No matches</div>
-              : filtered.map(o => {
-                  const checked = selected.has(o.id);
-                  return (
-                    <div key={o.id} onMouseDown={e => { e.preventDefault(); toggle(o.id); }}
-                      style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 14px", cursor: "pointer", fontSize: 13, borderBottom: "1px solid rgba(0,0,0,.03)", background: checked ? "rgba(220,38,38,.05)" : "transparent" }}>
-                      <div style={{ width: 16, height: 16, borderRadius: 4, flexShrink: 0, border: checked ? "none" : "1.5px solid #c5cdd8", background: checked ? "#dc2626" : "transparent", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        {checked && <span style={{ color: "#fff", fontSize: 10, lineHeight: 1 }}>✓</span>}
-                      </div>
-                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o.name}</span>
-                    </div>
-                  );
-                })
-            }
-          </div>
-        </div>
-      )}
+        {selected.size > 0 && (
+          <button onClick={() => onChange(new Set())}
+            style={{ position: "absolute", right: 28, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "var(--ink-3)", fontSize: 16, lineHeight: 1, padding: 2 }}>
+            ×
+          </button>
+        )}
+      </div>
+      {panel}
     </div>
   );
 }
@@ -230,35 +258,67 @@ export default function CatalogueClient() {
 
   return (
     <div>
-      {/* Controls */}
-      <div style={{ display: "flex", gap: 10, marginBottom: 24, flexWrap: "wrap", alignItems: "flex-end" }}>
-        {/* Search */}
-        <div style={{ flex: "1 1 180px", minWidth: 140 }}>
+      {/* Filter bar — all 4 controls on one row */}
+      <div style={{
+        background: "rgba(255,255,255,.72)",
+        border: "1px solid rgba(255,255,255,.88)",
+        borderRadius: 14,
+        padding: "14px 16px",
+        backdropFilter: "blur(10px)",
+        WebkitBackdropFilter: "blur(10px)",
+        boxShadow: "0 2px 10px rgba(40,60,110,.06)",
+        marginBottom: 20,
+        display: "flex",
+        gap: 12,
+        flexWrap: "wrap",
+        alignItems: "flex-end",
+      }}>
+        {/* Search — flex 2 */}
+        <div style={{ flex: "2 1 180px", minWidth: 140 }}>
           <label style={{ display: "block", fontSize: 11.5, fontWeight: 500, color: "var(--ink-3)", marginBottom: 5, textTransform: "uppercase", letterSpacing: ".06em" }}>
             Search
           </label>
           <input type="search" placeholder="Product name…" value={searchDraft}
             onChange={e => handleSearch(e.target.value)}
-            style={{ width: "100%", padding: "9px 14px", borderRadius: 10, border: "1px solid var(--g-line)", background: "rgba(255,255,255,.7)", color: "var(--ink)", fontSize: 13, boxSizing: "border-box" }} />
+            style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid var(--g-line)", background: "rgba(255,255,255,.7)", color: "var(--ink)", fontSize: 13, boxSizing: "border-box", outline: "none" }} />
         </div>
 
+        {/* Merchant — flex 1 */}
         <MerchantMultiSelect
           options={merchantOpts}
           selected={selectedMerchants}
           onChange={next => { setSelectedMerchants(next); setPage(0); }}
         />
-      </div>
 
-      {/* Category + Subcategory filter */}
-      <div style={{ marginBottom: 24 }}>
+        {/* Category + Subcategory — each flex 1 within the 2-unit slot */}
         <CategoryFilter
           nmlCategory={nmlCategory}
           nmlSubcategory={nmlSubcategory}
           onChange={(cat, sub) => { setNmlCategory(cat); setNmlSubcategory(sub); setPage(0); }}
           loadCategories={loadCategories}
           loadSubcategories={loadSubcategories}
+          style={{ flex: "2 1 280px" }}
+          showChips={false}
         />
       </div>
+
+      {/* Active category chips below bar */}
+      {(nmlCategory || nmlSubcategory) && (
+        <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
+          {nmlCategory && (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 10px 3px 12px", borderRadius: 99, background: "rgba(220,38,38,.1)", color: "#b91c1c", fontSize: 12, fontWeight: 500, direction: "rtl" }}>
+              {nmlCategory}
+              <button onClick={() => { setNmlCategory(""); setNmlSubcategory(""); setPage(0); }} style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", fontSize: 14, lineHeight: 1, padding: 0, display: "flex" }}>×</button>
+            </span>
+          )}
+          {nmlSubcategory && (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 10px 3px 12px", borderRadius: 99, background: "rgba(0,0,0,.06)", color: "var(--ink-2)", fontSize: 12, fontWeight: 500, direction: "rtl" }}>
+              {nmlSubcategory}
+              <button onClick={() => { setNmlSubcategory(""); setPage(0); }} style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", fontSize: 14, lineHeight: 1, padding: 0, display: "flex" }}>×</button>
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Error */}
       {error && (

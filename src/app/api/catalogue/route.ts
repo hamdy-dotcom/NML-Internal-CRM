@@ -34,15 +34,23 @@ export async function GET(req: NextRequest) {
       if (!merchantIds.length) return NextResponse.json({ categories: [] });
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data } = await (adminClient.from("v_nml_category_counts") as any)
-        .select("nml_category, product_count")
-        .order("product_count", { ascending: false });
+      const { data, error } = await (adminClient.from("products") as any)
+        .select("nml_category")
+        .in("merchant_id", merchantIds)
+        .not("nml_category", "is", null)
+        .limit(10000);
+
+      console.log("[catalogue] nml-categories:", { merchantCount: merchantIds.length, rows: (data ?? []).length, error: error?.message });
+      if (error) console.error("[catalogue] nml-categories error:", error);
+
+      const catMap = new Map<string, number>();
+      for (const r of (data ?? []) as { nml_category: string }[])
+        catMap.set(r.nml_category, (catMap.get(r.nml_category) ?? 0) + 1);
 
       return NextResponse.json({
-        categories: ((data ?? []) as { nml_category: string; product_count: number }[]).map(r => ({
-          value: r.nml_category,
-          count: r.product_count,
-        })),
+        categories: [...catMap.entries()]
+          .map(([value, count]) => ({ value, count }))
+          .sort((a, b) => b.count - a.count),
       });
     }
 
@@ -50,18 +58,27 @@ export async function GET(req: NextRequest) {
     if (type === "nml-subcategories") {
       const category = searchParams.get("category") ?? "";
       if (!category) return NextResponse.json({ subcategories: [] });
+      if (!merchantIds.length) return NextResponse.json({ subcategories: [] });
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data } = await (adminClient.from("v_nml_subcategory_counts") as any)
-        .select("nml_subcategory, product_count")
+      const { data, error } = await (adminClient.from("products") as any)
+        .select("nml_subcategory")
+        .in("merchant_id", merchantIds)
         .eq("nml_category", category)
-        .order("product_count", { ascending: false });
+        .not("nml_subcategory", "is", null)
+        .limit(10000);
+
+      console.log("[catalogue] nml-subcategories:", { category, merchantCount: merchantIds.length, rows: (data ?? []).length, error: error?.message });
+      if (error) console.error("[catalogue] nml-subcategories error:", error);
+
+      const subMap = new Map<string, number>();
+      for (const r of (data ?? []) as { nml_subcategory: string }[])
+        subMap.set(r.nml_subcategory, (subMap.get(r.nml_subcategory) ?? 0) + 1);
 
       return NextResponse.json({
-        subcategories: ((data ?? []) as { nml_subcategory: string; product_count: number }[]).map(r => ({
-          value: r.nml_subcategory,
-          count: r.product_count,
-        })),
+        subcategories: [...subMap.entries()]
+          .map(([value, count]) => ({ value, count }))
+          .sort((a, b) => b.count - a.count),
       });
     }
 

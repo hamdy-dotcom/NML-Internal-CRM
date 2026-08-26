@@ -128,23 +128,20 @@ export default function ProductsTable() {
   }, []);
 
   const loadCategories = useCallback(async (): Promise<CategoryCount[]> => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data } = await (supabase.from("v_nml_category_counts") as any)
-      .select("nml_category, product_count")
-      .order("product_count", { ascending: false });
-    return ((data ?? []) as { nml_category: string; product_count: number }[])
-      .map(r => ({ value: r.nml_category, count: r.product_count }));
+    const { data } = await supabase.from("products").select("nml_category").not("nml_category", "is", null).limit(10000);
+    const map = new Map<string, number>();
+    for (const r of (data ?? []) as { nml_category: string }[])
+      map.set(r.nml_category, (map.get(r.nml_category) ?? 0) + 1);
+    return [...map.entries()].map(([value, count]) => ({ value, count })).sort((a, b) => b.count - a.count);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadSubcategories = useCallback(async (cat: string): Promise<CategoryCount[]> => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data } = await (supabase.from("v_nml_subcategory_counts") as any)
-      .select("nml_subcategory, product_count")
-      .eq("nml_category", cat)
-      .order("product_count", { ascending: false });
-    return ((data ?? []) as { nml_subcategory: string; product_count: number }[])
-      .map(r => ({ value: r.nml_subcategory, count: r.product_count }));
+    const { data } = await supabase.from("products").select("nml_subcategory").eq("nml_category", cat).not("nml_subcategory", "is", null).limit(10000);
+    const map = new Map<string, number>();
+    for (const r of (data ?? []) as { nml_subcategory: string }[])
+      map.set(r.nml_subcategory, (map.get(r.nml_subcategory) ?? 0) + 1);
+    return [...map.entries()].map(([value, count]) => ({ value, count })).sort((a, b) => b.count - a.count);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -387,22 +384,34 @@ export default function ProductsTable() {
 
       {/* Filters panel */}
       {filtersOpen && (
-        <div className="glass-panel" style={{ padding: "14px 16px", marginBottom: 12, display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))", gap: 10 }}>
-          {/* Merchant combobox */}
-          <Combobox
-            label="Merchant"
-            value={filters.merchant}
-            options={merchantOptions}
-            open={merchantDropdown}
-            placeholder="Search merchant…"
-            onChange={v => setFilters(f => ({ ...f, merchant: v }))}
-            onOpen={() => setMerchantDropdown(true)}
-            onClose={() => setMerchantDropdown(false)}
-            onSelect={v => { setFilters(f => ({ ...f, merchant: v })); setMerchantDropdown(false); }}
-          />
+        <div style={{
+          background: "var(--surface, #fff)",
+          border: "1px solid var(--g-line)",
+          borderRadius: 12,
+          padding: "14px 16px",
+          marginBottom: 12,
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 10,
+          alignItems: "flex-end",
+        }}>
+          {/* Merchant combobox — flex 1 */}
+          <div style={{ flex: "1 1 160px", minWidth: 140 }}>
+            <Combobox
+              label="Merchant"
+              value={filters.merchant}
+              options={merchantOptions}
+              open={merchantDropdown}
+              placeholder="Search merchant…"
+              onChange={v => setFilters(f => ({ ...f, merchant: v }))}
+              onOpen={() => setMerchantDropdown(true)}
+              onClose={() => setMerchantDropdown(false)}
+              onSelect={v => { setFilters(f => ({ ...f, merchant: v })); setMerchantDropdown(false); }}
+            />
+          </div>
 
-          {/* Merchant stage */}
-          <div>
+          {/* Merchant stage — flex 1 */}
+          <div style={{ flex: "1 1 160px", minWidth: 140 }}>
             <label className="field-label">Merchant stage</label>
             <select className="field" value={filters.stage} onChange={e => setFilters(f => ({ ...f, stage: e.target.value }))}>
               <option value="">Any stage</option>
@@ -412,44 +421,45 @@ export default function ProductsTable() {
             </select>
           </div>
 
-          {/* Category + Subcategory */}
-          <div style={{ gridColumn: "1 / -1" }}>
-            <CategoryFilter
-              nmlCategory={filters.nmlCategory}
-              nmlSubcategory={filters.nmlSubcategory}
-              onChange={(cat, sub) => setFilters(f => ({ ...f, nmlCategory: cat, nmlSubcategory: sub }))}
-              loadCategories={loadCategories}
-              loadSubcategories={loadSubcategories}
+          {/* Category + Subcategory — flex 2 (two dropdowns at flex 1 each) */}
+          <CategoryFilter
+            nmlCategory={filters.nmlCategory}
+            nmlSubcategory={filters.nmlSubcategory}
+            onChange={(cat, sub) => setFilters(f => ({ ...f, nmlCategory: cat, nmlSubcategory: sub }))}
+            loadCategories={loadCategories}
+            loadSubcategories={loadSubcategories}
+            style={{ flex: "2 1 300px" }}
+          />
+
+          {/* Brand combobox — flex 1 */}
+          <div style={{ flex: "1 1 140px", minWidth: 120 }}>
+            <Combobox
+              label="Brand"
+              value={filters.brand}
+              options={brandOptions}
+              open={brandDropdown}
+              placeholder="Search brand…"
+              onChange={v => setFilters(f => ({ ...f, brand: v }))}
+              onOpen={() => setBrandDropdown(true)}
+              onClose={() => setBrandDropdown(false)}
+              onSelect={v => { setFilters(f => ({ ...f, brand: v })); setBrandDropdown(false); }}
             />
           </div>
 
-          {/* Brand combobox */}
-          <Combobox
-            label="Brand"
-            value={filters.brand}
-            options={brandOptions}
-            open={brandDropdown}
-            placeholder="Search brand…"
-            onChange={v => setFilters(f => ({ ...f, brand: v }))}
-            onOpen={() => setBrandDropdown(true)}
-            onClose={() => setBrandDropdown(false)}
-            onSelect={v => { setFilters(f => ({ ...f, brand: v })); setBrandDropdown(false); }}
-          />
-
-          {/* Price range */}
-          <div>
+          {/* Price range — each flex 0.5 */}
+          <div style={{ flex: "0.5 1 100px", minWidth: 90 }}>
             <label className="field-label">Price min</label>
             <input className="field" type="number" placeholder="0"
               value={filters.priceMin} onChange={e => setFilters(f => ({ ...f, priceMin: e.target.value }))} />
           </div>
-          <div>
+          <div style={{ flex: "0.5 1 100px", minWidth: 90 }}>
             <label className="field-label">Price max</label>
             <input className="field" type="number" placeholder="∞"
               value={filters.priceMax} onChange={e => setFilters(f => ({ ...f, priceMax: e.target.value }))} />
           </div>
 
-          <div style={{ display: "flex", alignItems: "flex-end" }}>
-            <button className="pill ghost" style={{ width: "100%" }} onClick={() => setFilters(DEFAULT_FILTERS)}>
+          <div style={{ flex: "0 0 auto", display: "flex", alignItems: "flex-end" }}>
+            <button className="pill ghost" onClick={() => setFilters(DEFAULT_FILTERS)}>
               Clear filters
             </button>
           </div>
