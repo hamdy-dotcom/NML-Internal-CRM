@@ -50,23 +50,34 @@ function MerchantMultiSelect({
     }
   }, [open]);
 
-  // Close on outside click — checks both the wrapper and portalled panel
+  // Close on outside click — composedPath covers the portalled panel correctly
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
-      const t = e.target as Node;
-      if (!wrapRef.current?.contains(t) && !panelRef.current?.contains(t)) setOpen(false);
+      const path = e.composedPath();
+      if (wrapRef.current  && path.includes(wrapRef.current  as EventTarget)) return;
+      if (panelRef.current && path.includes(panelRef.current as EventTarget)) return;
+      setOpen(false);
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
-  // Close on scroll so panel doesn't drift
+  // Close on page scroll (but NOT when scrolling the options list inside the panel)
+  // and on Escape key
   useEffect(() => {
     if (!open) return;
-    const handler = () => setOpen(false);
-    window.addEventListener("scroll", handler, { passive: true, capture: true });
-    return () => window.removeEventListener("scroll", handler, { capture: true });
+    const onScroll = (e: Event) => {
+      if (panelRef.current?.contains(e.target as Node)) return;
+      setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    window.addEventListener("scroll", onScroll, { passive: true, capture: true });
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("scroll", onScroll, { capture: true });
+      window.removeEventListener("keydown", onKey);
+    };
   }, [open]);
 
   const filtered = options.filter(o =>

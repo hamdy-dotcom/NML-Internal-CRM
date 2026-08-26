@@ -61,23 +61,36 @@ function Dropdown({
     }
   }, [state.open]);
 
-  // Close on outside click — checks both the trigger wrapper and the portalled panel
+  // Close on outside click — uses composedPath so it works even across portals
   useEffect(() => {
     if (!state.open) return;
     const handler = (e: MouseEvent) => {
-      const t = e.target as Node;
-      if (!wrapRef.current?.contains(t) && !panelRef.current?.contains(t)) onClose();
+      const path = e.composedPath();
+      if (wrapRef.current  && path.includes(wrapRef.current  as EventTarget)) return;
+      if (panelRef.current && path.includes(panelRef.current as EventTarget)) return;
+      onClose();
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [state.open, onClose]);
 
-  // Close on scroll so the panel doesn't drift
+  // Close on page scroll (but NOT when scrolling inside our own panel options list)
+  // and on Escape key
   useEffect(() => {
     if (!state.open) return;
-    const handler = () => onClose();
-    window.addEventListener("scroll", handler, { passive: true, capture: true });
-    return () => window.removeEventListener("scroll", handler, { capture: true });
+    const onScroll = (e: Event) => {
+      // The scroll target is the element being scrolled.
+      // If it's inside our portalled panel we must not close — that's the options list scrolling.
+      if (panelRef.current?.contains(e.target as Node)) return;
+      onClose();
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("scroll", onScroll, { passive: true, capture: true });
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("scroll", onScroll, { capture: true });
+      window.removeEventListener("keydown", onKey);
+    };
   }, [state.open, onClose]);
 
   const visible = options
