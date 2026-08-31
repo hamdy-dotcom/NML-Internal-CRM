@@ -34,32 +34,52 @@ export const PIPELINE_FUNNEL_STAGES: MerchantStage[] = [
 // ── Metric 1: reachedStage ────────────────────────────────────────────────
 // How many merchants EVER reached each stage (timestamp IS NOT NULL).
 // Cumulative and monotonically decreasing down the funnel.
-// Optional cohort filter: restrict to merchants whose created_at >= dateStart.
-// Dashboard funnel uses this metric.
+//
+// Implemented as 8 parallel server-side COUNT(*) queries with head:true so
+// zero rows are transferred. Never fetch rows to count them.
+//
+// opts.userId: restrict to a single specialist's merchants (acquisition_owner_id)
 
-export const FUNNEL_SELECT =
-  "assigned_at, first_contact_at, interested_at, form_sent_at, cta_completed_at, onboarding_started_at, activated_at";
+export type FunnelCounts = Partial<Record<MerchantStage, number>>;
 
-export type FunnelRow = {
-  assigned_at:           string | null;
-  first_contact_at:      string | null;
-  interested_at:         string | null;
-  form_sent_at:          string | null;
-  cta_completed_at:      string | null;
-  onboarding_started_at: string | null;
-  activated_at:          string | null;
-};
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function fetchFunnelCounts(supabase: any, opts?: { userId?: string }): Promise<FunnelCounts> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function base(): any {
+    let q = supabase.from("merchants").select("*", { count: "exact", head: true });
+    if (opts?.userId) q = q.eq("acquisition_owner_id", opts.userId);
+    return q;
+  }
 
-export function buildFunnelCounts(rows: FunnelRow[]): Partial<Record<MerchantStage, number>> {
+  const [
+    { count: nNew },
+    { count: assigned },
+    { count: contacted },
+    { count: interested },
+    { count: formSent },
+    { count: ctaCompleted },
+    { count: onboarding },
+    { count: active },
+  ] = (await Promise.all([
+    base(),
+    base().not("assigned_at",            "is", null),
+    base().not("first_contact_at",       "is", null),
+    base().not("interested_at",          "is", null),
+    base().not("form_sent_at",           "is", null),
+    base().not("cta_completed_at",       "is", null),
+    base().not("onboarding_started_at",  "is", null),
+    base().not("activated_at",           "is", null),
+  ])) as Array<{ count: number | null }>;
+
   return {
-    new:           rows.length,
-    assigned:      rows.filter(r => r.assigned_at            != null).length,
-    contacted:     rows.filter(r => r.first_contact_at       != null).length,
-    interested:    rows.filter(r => r.interested_at          != null).length,
-    form_sent:     rows.filter(r => r.form_sent_at           != null).length,
-    cta_completed: rows.filter(r => r.cta_completed_at       != null).length,
-    onboarding:    rows.filter(r => r.onboarding_started_at  != null).length,
-    active:        rows.filter(r => r.activated_at           != null).length,
+    new:           nNew          ?? 0,
+    assigned:      assigned      ?? 0,
+    contacted:     contacted     ?? 0,
+    interested:    interested    ?? 0,
+    form_sent:     formSent      ?? 0,
+    cta_completed: ctaCompleted  ?? 0,
+    onboarding:    onboarding    ?? 0,
+    active:        active        ?? 0,
   };
 }
 

@@ -6,7 +6,7 @@ import EmptyState from "@/components/ui/EmptyState";
 import type { MerchantStage, UserRole, VSpecialistPerformance } from "@/lib/database.types";
 import { STAGE_LABELS, fmtDate } from "@/lib/utils";
 import {
-  FUNNEL_STAGES, FUNNEL_SELECT, type FunnelRow, buildFunnelCounts,
+  FUNNEL_STAGES, fetchFunnelCounts,
   SPECIALIST_COL_LABELS,
 } from "@/lib/metrics";
 
@@ -91,7 +91,7 @@ async function SpecialistDashboard({ userId }: { userId: string }) {
     { count: formsSent },
     { count: converted },
     rawDueNow,
-    rawFunnelRows,
+    stageCounts,
   ] = await Promise.all([
     supabase.from("merchants").select("*", { count: "exact", head: true })
       .eq("acquisition_owner_id", userId).not("stage", "in", "(active,lost,not_interested)"),
@@ -104,14 +104,11 @@ async function SpecialistDashboard({ userId }: { userId: string }) {
     supabase.from("merchants").select("id, store_name, phone, next_action_at, stage")
       .eq("acquisition_owner_id", userId).lte("next_action_at", now).not("stage", "in", "(active,lost,not_interested)")
       .order("next_action_at", { ascending: true }).limit(20),
-    // Funnel: all merchants for this specialist, all time.
-    supabase.from("merchants").select(FUNNEL_SELECT)
-      .eq("acquisition_owner_id", userId)
-      .limit(10000),
+    // Funnel: 8 parallel COUNT(*) queries — no rows transferred.
+    fetchFunnelCounts(supabase, { userId }),
   ]);
 
-  const dueNow      = castRows<DueNowRow>(rawDueNow.data);
-  const stageCounts = buildFunnelCounts(castRows<FunnelRow>(rawFunnelRows.data));
+  const dueNow = castRows<DueNowRow>(rawDueNow.data);
 
   return (
     <>
@@ -170,13 +167,13 @@ async function ManagerDashboard({ userId: _userId }: { userId: string }) {
   const staleDate = new Date(Date.now() - 7 * 86_400_000).toISOString();
 
   const [
-    rawStageRows,
+    stageCounts,
     rawSpecialists,
     { count: unassigned },
     rawStale,
   ] = await Promise.all([
-    // Funnel: all merchants, all time. No stage filter — lost/not_interested still count.
-    supabase.from("merchants").select(FUNNEL_SELECT).limit(10000),
+    // Funnel: 8 parallel COUNT(*) queries, all merchants, all time — no rows transferred.
+    fetchFunnelCounts(supabase),
     supabase.from("v_specialist_performance").select("*"),
     supabase.from("merchants").select("*", { count: "exact", head: true }).eq("stage", "new"),
     supabase.from("merchants").select("id, store_name, stage, last_activity_at")
@@ -184,7 +181,6 @@ async function ManagerDashboard({ userId: _userId }: { userId: string }) {
       .order("last_activity_at", { ascending: true }).limit(20),
   ]);
 
-  const stageCounts = buildFunnelCounts(castRows<FunnelRow>(rawStageRows.data));
   const specialists = castRows<VSpecialistPerformance>(rawSpecialists.data);
   const stale       = castRows<StaleRow>(rawStale.data);
 
