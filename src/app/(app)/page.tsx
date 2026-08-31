@@ -10,24 +10,6 @@ import {
   SPECIALIST_COL_LABELS,
 } from "@/lib/metrics";
 
-// ── Date range helpers ─────────────────────────────────────────────────────
-
-type Range = "week" | "month" | "30d";
-
-function getDateStart(range: Range): string {
-  const d = new Date();
-  if (range === "week")  { d.setDate(d.getDate() - 7);  d.setHours(0, 0, 0, 0); }
-  if (range === "30d")   { d.setDate(d.getDate() - 30); d.setHours(0, 0, 0, 0); }
-  if (range === "month") { d.setDate(1);                 d.setHours(0, 0, 0, 0); }
-  return d.toISOString();
-}
-
-const RANGE_LABELS: Record<Range, string> = {
-  week:  "This week",
-  month: "This month",
-  "30d": "Last 30 days",
-};
-
 // ── Shared helper — cast Supabase partial selects ─────────────────────────
 
 // Supabase's TypeScript inference collapses to `never` for partial column
@@ -35,25 +17,6 @@ const RANGE_LABELS: Record<Range, string> = {
 // `unknown` is the standard workaround; the runtime data is always correct.
 function castRows<T>(data: unknown): T[] {
   return (data ?? []) as T[];
-}
-
-// ── Date-range picker (server-rendered links) ──────────────────────────────
-
-function RangePicker({ current }: { current: Range }) {
-  return (
-    <div style={{ display: "flex", gap: 4 }}>
-      {(["week", "month", "30d"] as Range[]).map((r) => (
-        <Link
-          key={r}
-          href={`?range=${r}`}
-          className={`pill${current === r ? " active" : " outline"}`}
-          style={{ fontSize: 12, padding: "4px 12px" }}
-        >
-          {RANGE_LABELS[r]}
-        </Link>
-      ))}
-    </div>
-  );
 }
 
 // ── Stat tile row ──────────────────────────────────────────────────────────
@@ -70,14 +33,14 @@ function TileRow({ tiles }: {
 
 // ── Funnel bar ─────────────────────────────────────────────────────────────
 
-function FunnelBar({ counts, rangeLabel }: { counts: Partial<Record<MerchantStage, number>>; rangeLabel?: string }) {
+function FunnelBar({ counts }: { counts: Partial<Record<MerchantStage, number>> }) {
   const top = Math.max(counts["new"] ?? 0, 1);
   return (
     <div className="glass-panel" style={{ padding: "14px 16px", marginBottom: 20 }}>
       <div style={{ fontSize: 12, fontWeight: 500, color: "var(--ink-2)", marginBottom: 10 }}>
         Pipeline funnel — ever reached each stage
         <span style={{ fontSize: 11, fontWeight: 400, color: "var(--ink-4)", marginLeft: 8 }}>
-          {rangeLabel ? `merchants added · ${rangeLabel}` : "all time"} · conv % from previous
+          all time · conv % from previous
         </span>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
@@ -117,7 +80,7 @@ type OnboardingProgressRow = { id: string; merchant_id: string; progress: number
 type OverdueStepRow = { id: string; title: string; merchant_id: string; due_at: string | null };
 type OnboardingMerchantRow = { id: string; store_name: string; cta_completed_at: string | null };
 
-async function SpecialistDashboard({ userId, dateStart, rangeLabel }: { userId: string; dateStart: string; rangeLabel: string }) {
+async function SpecialistDashboard({ userId }: { userId: string }) {
   const supabase   = await createClient();
   const now        = new Date().toISOString();
   const monthStart = (() => { const d = new Date(); d.setDate(1); d.setHours(0,0,0,0); return d.toISOString(); })();
@@ -141,11 +104,9 @@ async function SpecialistDashboard({ userId, dateStart, rangeLabel }: { userId: 
     supabase.from("merchants").select("id, store_name, phone, next_action_at, stage")
       .eq("acquisition_owner_id", userId).lte("next_action_at", now).not("stage", "in", "(active,lost,not_interested)")
       .order("next_action_at", { ascending: true }).limit(20),
-    // Funnel: count how many merchants ever reached each stage (timestamp IS NOT NULL).
-    // Filtered to this specialist's merchants created within the selected date range.
+    // Funnel: all merchants for this specialist, all time.
     supabase.from("merchants").select(FUNNEL_SELECT)
       .eq("acquisition_owner_id", userId)
-      .gte("created_at", dateStart)
       .limit(10000),
   ]);
 
@@ -161,7 +122,7 @@ async function SpecialistDashboard({ userId, dateStart, rangeLabel }: { userId: 
         { label: "Converted this month", value: converted ?? 0,  tint: "green" },
       ]} />
 
-      <FunnelBar counts={stageCounts} rangeLabel={rangeLabel} />
+      <FunnelBar counts={stageCounts} />
 
       <div className="glass-panel" style={{ padding: "14px 16px" }}>
         <div style={{ fontSize: 12, fontWeight: 500, color: "var(--ink-2)", marginBottom: 10 }}>Due now</div>
@@ -203,7 +164,7 @@ async function SpecialistDashboard({ userId, dateStart, rangeLabel }: { userId: 
   );
 }
 
-async function ManagerDashboard({ userId: _userId, dateStart, rangeLabel }: { userId: string; dateStart: string; rangeLabel: string }) {
+async function ManagerDashboard({ userId: _userId }: { userId: string }) {
   const supabase = await createClient();
 
   const staleDate = new Date(Date.now() - 7 * 86_400_000).toISOString();
@@ -214,9 +175,8 @@ async function ManagerDashboard({ userId: _userId, dateStart, rangeLabel }: { us
     { count: unassigned },
     rawStale,
   ] = await Promise.all([
-    // Funnel: all merchants created within the selected date range, timestamp columns only.
-    // No stage filter — lost/not_interested merchants still count toward the stage they reached.
-    supabase.from("merchants").select(FUNNEL_SELECT).gte("created_at", dateStart).limit(10000),
+    // Funnel: all merchants, all time. No stage filter — lost/not_interested still count.
+    supabase.from("merchants").select(FUNNEL_SELECT).limit(10000),
     supabase.from("v_specialist_performance").select("*"),
     supabase.from("merchants").select("*", { count: "exact", head: true }).eq("stage", "new"),
     supabase.from("merchants").select("id, store_name, stage, last_activity_at")
@@ -240,7 +200,7 @@ async function ManagerDashboard({ userId: _userId, dateStart, rangeLabel }: { us
         </div>
       )}
 
-      <FunnelBar counts={stageCounts} rangeLabel={rangeLabel} />
+      <FunnelBar counts={stageCounts} />
 
       {specialists.length > 0 && (
         <div className="glass-panel" style={{ padding: "14px 16px", marginBottom: 20 }}>
@@ -314,7 +274,7 @@ async function ManagerDashboard({ userId: _userId, dateStart, rangeLabel }: { us
   );
 }
 
-async function AccountManagerDashboard({ userId, dateStart: _dateStart }: { userId: string; dateStart: string }) {
+async function AccountManagerDashboard({ userId }: { userId: string }) {
   const supabase   = await createClient();
   const monthStart = (() => { const d = new Date(); d.setDate(1); d.setHours(0,0,0,0); return d.toISOString(); })();
 
@@ -430,7 +390,7 @@ async function AccountManagerDashboard({ userId, dateStart: _dateStart }: { user
   );
 }
 
-async function CatalogOpsDashboard({ dateStart: _dateStart }: { dateStart: string }) {
+async function CatalogOpsDashboard() {
   const supabase  = await createClient();
   const weekStart = (() => { const d = new Date(); d.setDate(d.getDate() - 7); d.setHours(0,0,0,0); return d.toISOString(); })();
 
@@ -505,15 +465,7 @@ async function CatalogOpsDashboard({ dateStart: _dateStart }: { dateStart: strin
 
 // ── Page ───────────────────────────────────────────────────────────────────
 
-interface Props {
-  searchParams: Promise<{ range?: string }>;
-}
-
-export default async function DashboardPage({ searchParams }: Props) {
-  const { range: rawRange } = await searchParams;
-  const range     = (["week", "month", "30d"].includes(rawRange ?? "") ? rawRange : "month") as Range;
-  const dateStart = getDateStart(range);
-
+export default async function DashboardPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   const rawProfile = await supabase.from("profiles").select("role, full_name").eq("id", user!.id).single();
@@ -523,27 +475,23 @@ export default async function DashboardPage({ searchParams }: Props) {
 
   return (
     <div style={{ paddingTop: 16 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20, flexWrap: "wrap", gap: 10 }}>
-        <div>
-          <h1 style={{ fontSize: 17, fontWeight: 500, margin: "0 0 2px", color: "var(--ink)" }}>
-            {profile?.full_name ? `Hi, ${profile.full_name.split(" ")[0]}` : "Dashboard"}
-          </h1>
-          <p style={{ margin: 0, fontSize: 12.5, color: "var(--ink-3)" }}>{RANGE_LABELS[range]}</p>
-        </div>
-        <RangePicker current={range} />
+      <div style={{ marginBottom: 20 }}>
+        <h1 style={{ fontSize: 17, fontWeight: 500, margin: 0, color: "var(--ink)" }}>
+          {profile?.full_name ? `Hi, ${profile.full_name.split(" ")[0]}` : "Dashboard"}
+        </h1>
       </div>
 
       {role === "acq_specialist" && (
-        <SpecialistDashboard userId={user!.id} dateStart={dateStart} rangeLabel={RANGE_LABELS[range]} />
+        <SpecialistDashboard userId={user!.id} />
       )}
       {(role === "acq_manager" || role === "admin") && (
-        <ManagerDashboard userId={user!.id} dateStart={dateStart} rangeLabel={RANGE_LABELS[range]} />
+        <ManagerDashboard userId={user!.id} />
       )}
       {role === "account_manager" && (
-        <AccountManagerDashboard userId={user!.id} dateStart={dateStart} />
+        <AccountManagerDashboard userId={user!.id} />
       )}
       {role === "catalog_ops" && (
-        <CatalogOpsDashboard dateStart={dateStart} />
+        <CatalogOpsDashboard />
       )}
       {role === "viewer" && (
         <EmptyState icon="👀" title="Viewer access" description="You have read-only access. Contact your admin to get a full role." />
