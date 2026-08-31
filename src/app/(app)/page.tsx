@@ -72,21 +72,31 @@ const FUNNEL_STAGES: MerchantStage[] = [
 ];
 
 function FunnelBar({ counts }: { counts: Partial<Record<MerchantStage, number>> }) {
-  const total = Math.max(counts["new"] ?? 0, 1);
+  const top = Math.max(counts["new"] ?? 0, 1);
   return (
     <div className="glass-panel" style={{ padding: "14px 16px", marginBottom: 20 }}>
-      <div style={{ fontSize: 12, fontWeight: 500, color: "var(--ink-2)", marginBottom: 10 }}>Pipeline funnel</div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        {FUNNEL_STAGES.map((s) => {
-          const n   = counts[s] ?? 0;
-          const pct = Math.round((n / total) * 100);
+      <div style={{ fontSize: 12, fontWeight: 500, color: "var(--ink-2)", marginBottom: 10 }}>
+        Pipeline funnel
+        <span style={{ fontSize: 11, fontWeight: 400, color: "var(--ink-4)", marginLeft: 8 }}>
+          ever reached each stage · conv % from previous
+        </span>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+        {FUNNEL_STAGES.map((s, i) => {
+          const n    = counts[s] ?? 0;
+          const pct  = Math.round((n / top) * 100);
+          const prev = i > 0 ? (counts[FUNNEL_STAGES[i - 1]] ?? 0) : null;
+          const conv = prev != null && prev > 0 ? Math.round((n / prev) * 100) : null;
           return (
             <div key={s} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <span style={{ width: 90, fontSize: 11.5, color: "var(--ink-3)", flexShrink: 0 }}>{STAGE_LABELS[s]}</span>
+              <span style={{ width: 96, fontSize: 11.5, color: "var(--ink-3)", flexShrink: 0 }}>{STAGE_LABELS[s]}</span>
               <div style={{ flex: 1, height: 6, borderRadius: 999, background: "rgba(120,135,160,.15)", overflow: "hidden" }}>
                 <div style={{ width: `${pct}%`, height: "100%", borderRadius: 999, background: "var(--blue)", transition: "width .4s ease" }} />
               </div>
-              <span className="num" style={{ width: 32, fontSize: 12 }}>{n}</span>
+              <span className="num" style={{ width: 36, fontSize: 12 }}>{n}</span>
+              <span style={{ width: 44, fontSize: 11, color: conv != null && conv < 50 ? "var(--amber)" : "var(--ink-4)", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+                {conv != null ? `${conv}%` : ""}
+              </span>
             </div>
           );
         })}
@@ -99,7 +109,39 @@ function FunnelBar({ counts }: { counts: Partial<Record<MerchantStage, number>> 
 // Role dashboards
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Shapes for partial-select results
+// ── Funnel helpers ────────────────────────────────────────────────────────────
+
+// One row per merchant: only the stage timestamp columns needed for the funnel.
+type FunnelRow = {
+  assigned_at:           string | null;
+  first_contact_at:      string | null;
+  interested_at:         string | null;
+  form_sent_at:          string | null;
+  cta_completed_at:      string | null;
+  onboarding_started_at: string | null;
+  activated_at:          string | null;
+};
+
+// Count how many merchants ever REACHED each stage (timestamp IS NOT NULL).
+// Counts are monotonically decreasing because each is a superset of the next.
+function buildFunnelCounts(rows: FunnelRow[]): Partial<Record<MerchantStage, number>> {
+  return {
+    new:           rows.length,
+    assigned:      rows.filter(r => r.assigned_at            != null).length,
+    contacted:     rows.filter(r => r.first_contact_at       != null).length,
+    interested:    rows.filter(r => r.interested_at          != null).length,
+    form_sent:     rows.filter(r => r.form_sent_at           != null).length,
+    cta_completed: rows.filter(r => r.cta_completed_at       != null).length,
+    onboarding:    rows.filter(r => r.onboarding_started_at  != null).length,
+    active:        rows.filter(r => r.activated_at           != null).length,
+  };
+}
+
+const FUNNEL_SELECT =
+  "assigned_at, first_contact_at, interested_at, form_sent_at, cta_completed_at, onboarding_started_at, activated_at";
+
+// ── Shapes for partial-select results ─────────────────────────────────────────
+
 type StageRow    = { stage: MerchantStage };
 type DueNowRow   = { id: string; store_name: string; phone: string | null; next_action_at: string | null; stage: MerchantStage };
 type StaleRow    = { id: string; store_name: string; stage: MerchantStage; last_activity_at: string | null };
@@ -107,7 +149,7 @@ type OnboardingProgressRow = { id: string; merchant_id: string; progress: number
 type OverdueStepRow = { id: string; title: string; merchant_id: string; due_at: string | null };
 type OnboardingMerchantRow = { id: string; store_name: string; cta_completed_at: string | null };
 
-async function SpecialistDashboard({ userId, dateStart: _dateStart }: { userId: string; dateStart: string }) {
+async function SpecialistDashboard({ userId, dateStart }: { userId: string; dateStart: string }) {
   const supabase   = await createClient();
   const now        = new Date().toISOString();
   const monthStart = (() => { const d = new Date(); d.setDate(1); d.setHours(0,0,0,0); return d.toISOString(); })();
@@ -118,7 +160,7 @@ async function SpecialistDashboard({ userId, dateStart: _dateStart }: { userId: 
     { count: formsSent },
     { count: converted },
     rawDueNow,
-    rawStageRows,
+    rawFunnelRows,
   ] = await Promise.all([
     supabase.from("merchants").select("*", { count: "exact", head: true })
       .eq("acquisition_owner_id", userId).not("stage", "in", "(active,lost,not_interested)"),
@@ -131,17 +173,16 @@ async function SpecialistDashboard({ userId, dateStart: _dateStart }: { userId: 
     supabase.from("merchants").select("id, store_name, phone, next_action_at, stage")
       .eq("acquisition_owner_id", userId).lte("next_action_at", now).not("stage", "in", "(active,lost,not_interested)")
       .order("next_action_at", { ascending: true }).limit(20),
-    supabase.from("merchants").select("stage")
-      .eq("acquisition_owner_id", userId).not("stage", "in", "(active,lost,not_interested)"),
+    // Funnel: count how many merchants ever reached each stage (timestamp IS NOT NULL).
+    // Filtered to this specialist's merchants created within the selected date range.
+    supabase.from("merchants").select(FUNNEL_SELECT)
+      .eq("acquisition_owner_id", userId)
+      .gte("created_at", dateStart)
+      .limit(10000),
   ]);
 
-  const dueNow   = castRows<DueNowRow>(rawDueNow.data);
-  const stageRows = castRows<StageRow>(rawStageRows.data);
-
-  const stageCounts: Partial<Record<MerchantStage, number>> = {};
-  for (const r of stageRows) {
-    stageCounts[r.stage] = (stageCounts[r.stage] ?? 0) + 1;
-  }
+  const dueNow      = castRows<DueNowRow>(rawDueNow.data);
+  const stageCounts = buildFunnelCounts(castRows<FunnelRow>(rawFunnelRows.data));
 
   return (
     <>
@@ -194,7 +235,7 @@ async function SpecialistDashboard({ userId, dateStart: _dateStart }: { userId: 
   );
 }
 
-async function ManagerDashboard({ userId: _userId, dateStart: _dateStart }: { userId: string; dateStart: string }) {
+async function ManagerDashboard({ userId: _userId, dateStart }: { userId: string; dateStart: string }) {
   const supabase = await createClient();
 
   const staleDate = new Date(Date.now() - 7 * 86_400_000).toISOString();
@@ -205,7 +246,9 @@ async function ManagerDashboard({ userId: _userId, dateStart: _dateStart }: { us
     { count: unassigned },
     rawStale,
   ] = await Promise.all([
-    supabase.from("merchants").select("stage").not("stage", "in", "(lost,not_interested)").limit(10000),
+    // Funnel: all merchants created within the selected date range, timestamp columns only.
+    // No stage filter — lost/not_interested merchants still count toward the stage they reached.
+    supabase.from("merchants").select(FUNNEL_SELECT).gte("created_at", dateStart).limit(10000),
     supabase.from("v_specialist_performance").select("*"),
     supabase.from("merchants").select("*", { count: "exact", head: true }).eq("stage", "new"),
     supabase.from("merchants").select("id, store_name, stage, last_activity_at")
@@ -213,14 +256,9 @@ async function ManagerDashboard({ userId: _userId, dateStart: _dateStart }: { us
       .order("last_activity_at", { ascending: true }).limit(20),
   ]);
 
-  const stageRows   = castRows<StageRow>(rawStageRows.data);
+  const stageCounts = buildFunnelCounts(castRows<FunnelRow>(rawStageRows.data));
   const specialists = castRows<VSpecialistPerformance>(rawSpecialists.data);
   const stale       = castRows<StaleRow>(rawStale.data);
-
-  const stageCounts: Partial<Record<MerchantStage, number>> = {};
-  for (const r of stageRows) {
-    stageCounts[r.stage] = (stageCounts[r.stage] ?? 0) + 1;
-  }
 
   return (
     <>
