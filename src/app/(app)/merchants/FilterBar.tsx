@@ -17,12 +17,13 @@ interface Props {
   currentPriority: string;
   currentIndustry: string;
   currentStoreType: string;
+  currentExtraction: string;
   industryOptions: string[];
   storeTypeOptions: string[];
   view: string;
 }
 
-export default function FilterBar({ currentQ, currentStages, currentCity, currentPriority, currentIndustry, currentStoreType, industryOptions, storeTypeOptions, view }: Props) {
+export default function FilterBar({ currentQ, currentStages, currentCity, currentPriority, currentIndustry, currentStoreType, currentExtraction, industryOptions, storeTypeOptions, view }: Props) {
   const router = useRouter();
   const sp = useSearchParams();
   const [open, setOpen] = useState(false);
@@ -36,9 +37,10 @@ export default function FilterBar({ currentQ, currentStages, currentCity, curren
   const [priority, setPriority] = useState(currentPriority);
   const [industry, setIndustry] = useState(currentIndustry);
   const [storeType, setStoreType] = useState(currentStoreType);
+  const [extraction, setExtraction] = useState(currentExtraction);
 
   // Active filter count
-  const activeCount = (currentStages.length > 0 ? 1 : 0) + (currentCity ? 1 : 0) + (currentPriority ? 1 : 0) + (currentIndustry ? 1 : 0) + (currentStoreType ? 1 : 0);
+  const activeCount = (currentStages.length > 0 ? 1 : 0) + (currentCity ? 1 : 0) + (currentPriority ? 1 : 0) + (currentIndustry ? 1 : 0) + (currentStoreType ? 1 : 0) + (currentExtraction ? 1 : 0);
 
   // Close on outside click
   useEffect(() => {
@@ -58,6 +60,7 @@ export default function FilterBar({ currentQ, currentStages, currentCity, curren
     if (priority) next.set('priority', priority);
     if (industry) next.set('industry', industry);
     if (storeType) next.set('store_type', storeType);
+    if (extraction) next.set('extraction', extraction);
     next.delete('page');
     startTransition(() => {
       router.push(`/merchants?${next.toString()}`);
@@ -66,7 +69,7 @@ export default function FilterBar({ currentQ, currentStages, currentCity, curren
   }
 
   function clear() {
-    setStages([]); setCity(''); setPriority(''); setIndustry(''); setStoreType('');
+    setStages([]); setCity(''); setPriority(''); setIndustry(''); setStoreType(''); setExtraction('');
     const next = new URLSearchParams();
     if (view !== 'all') next.set('view', view);
     if (q.trim()) next.set('q', q.trim());
@@ -167,6 +170,18 @@ export default function FilterBar({ currentQ, currentStages, currentCity, curren
                 </select>
               </div>
             )}
+
+            {/* Extraction status */}
+            <div style={{ marginBottom: 12 }}>
+              <label className="field-label">Extraction status</label>
+              <select className="field" value={extraction} onChange={e => setExtraction(e.target.value)}>
+                <option value="">Any</option>
+                <option value="never">Never fetched</option>
+                <option value="fetching">Fetching</option>
+                <option value="fetched">Fetched</option>
+                <option value="failed">Failed</option>
+              </select>
+            </div>
 
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
               <button className="pill outline" style={{ fontSize: 12 }} onClick={clear}>Clear</button>

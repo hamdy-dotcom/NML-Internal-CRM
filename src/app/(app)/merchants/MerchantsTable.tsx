@@ -4,6 +4,7 @@ import { useState, useTransition, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import type { VMerchantList, MerchantPriority } from '@/lib/database.types';
+import type { FetchJobSummary } from './page';
 import StageBadge from '@/components/ui/StageBadge';
 import PhoneCell from '@/components/ui/PhoneCell';
 import EmptyState from '@/components/ui/EmptyState';
@@ -12,12 +13,17 @@ import UserPicker from '@/components/ui/UserPicker';
 import { isOverdue, fmtDate, PRIORITY_LABELS } from '@/lib/utils';
 import { bulkAssign, bulkSetPriority, bulkAddTag } from './actions';
 
+export type EnrichedMerchant = VMerchantList & {
+  product_count: number;
+  extraction: FetchJobSummary | null;
+};
+
 interface Props {
-  rows: VMerchantList[];
+  rows: EnrichedMerchant[];
   view: string;
 }
 
-type SortKey = 'store_name' | 'city' | 'stage' | 'priority' | 'next_action_at' | 'product_total' | 'industry' | 'avg_monthly_sales';
+type SortKey = 'store_name' | 'city' | 'stage' | 'priority' | 'next_action_at' | 'product_count' | 'industry' | 'avg_monthly_sales' | 'extraction';
 type SortDir = 'asc' | 'desc';
 
 const OPTIONAL_COLS = ['industry', 'avg_monthly_sales'] as const;
@@ -67,9 +73,14 @@ export default function MerchantsTable({ rows, view }: Props) {
     else if (sortKey === 'stage') { av = a.stage; bv = b.stage; }
     else if (sortKey === 'priority') { av = a.priority; bv = b.priority; }
     else if (sortKey === 'next_action_at') { av = a.next_action_at; bv = b.next_action_at; }
-    else if (sortKey === 'product_total') { av = a.product_total; bv = b.product_total; }
+    else if (sortKey === 'product_count') { av = a.product_count; bv = b.product_count; }
     else if (sortKey === 'industry') { av = a.industry; bv = b.industry; }
     else if (sortKey === 'avg_monthly_sales') { av = a.avg_monthly_sales; bv = b.avg_monthly_sales; }
+    else if (sortKey === 'extraction') {
+      const order: Record<string, number> = { done: 0, pending: 1, running: 2, error: 3 };
+      av = a.extraction ? (order[a.extraction.status] ?? 9) : 10;
+      bv = b.extraction ? (order[b.extraction.status] ?? 9) : 10;
+    }
     if (av == null && bv == null) return 0;
     if (av == null) return 1;
     if (bv == null) return -1;
@@ -165,11 +176,14 @@ export default function MerchantsTable({ rows, view }: Props) {
           <button
             onClick={() => {
               const csv = [
-                ['Code', 'Store', 'City', 'Stage', 'Owner', 'SKUs'],
-                ...sorted.filter(r => selected.has(r.id)).map(r => [
-                  r.merchant_code, r.store_name, r.city ?? '', r.stage,
-                  r.acquisition_owner_name ?? '', String(r.product_total),
-                ]),
+                ['Code', 'Store', 'City', 'Stage', 'Owner', 'Products', 'Extraction'],
+                ...sorted.filter(r => selected.has(r.id)).map(r => {
+                  const ext = r.extraction == null ? 'Never fetched'
+                    : r.extraction.status === 'pending' || r.extraction.status === 'running' ? 'Fetching'
+                    : r.extraction.status === 'done' ? `Fetched ${r.extraction.products_found}`
+                    : 'Failed';
+                  return [r.merchant_code, r.store_name, r.city ?? '', r.stage, r.acquisition_owner_name ?? '', String(r.product_count), ext];
+                }),
               ].map(row => row.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
               const blob = new Blob([csv], { type: 'text/csv' });
               const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
@@ -206,8 +220,11 @@ export default function MerchantsTable({ rows, view }: Props) {
                 Stage<SortArrow col="stage" />
               </th>
               <th>Owner</th>
-              <th onClick={() => toggleSort('product_total')} style={{ cursor: 'pointer', textAlign: 'end' }}>
-                SKUs<SortArrow col="product_total" />
+              <th onClick={() => toggleSort('product_count')} style={{ cursor: 'pointer', textAlign: 'end' }}>
+                Products<SortArrow col="product_count" />
+              </th>
+              <th onClick={() => toggleSort('extraction')} style={{ cursor: 'pointer' }}>
+                Extraction<SortArrow col="extraction" />
               </th>
               <th onClick={() => toggleSort('next_action_at')} style={{ cursor: 'pointer' }}>
                 Next action<SortArrow col="next_action_at" />
@@ -261,7 +278,18 @@ export default function MerchantsTable({ rows, view }: Props) {
                       {row.acquisition_owner_name ?? '—'}
                     </span>
                   </td>
-                  <td className="num">{row.product_total}</td>
+                  <td className="num">{row.product_count}</td>
+                  <td>
+                    {row.extraction == null ? (
+                      <span style={{ color: 'var(--ink-4)', fontSize: 12 }}>Never fetched</span>
+                    ) : row.extraction.status === 'pending' || row.extraction.status === 'running' ? (
+                      <span style={{ color: 'var(--blue)', fontSize: 12 }}>Fetching</span>
+                    ) : row.extraction.status === 'done' ? (
+                      <span style={{ color: 'var(--green)', fontSize: 12 }}>Fetched {row.extraction.products_found > 0 ? row.extraction.products_found : ''}</span>
+                    ) : (
+                      <span style={{ color: 'var(--red)', fontSize: 12 }}>Failed</span>
+                    )}
+                  </td>
                   <td>
                     {row.next_action_at ? (
                       <span style={{ color: overdue ? 'var(--red)' : 'var(--ink-2)', fontSize: 12.5 }}>
