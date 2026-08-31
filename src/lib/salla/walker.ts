@@ -6,16 +6,23 @@
 //   3. source=categories  — walk each category ID
 //   4. source=brands      — walk each brand ID mined from found products
 //   5. Repeat 3–4 up to MAX_ROUNDS, stop when a round adds nothing new
+//
+// Early-stop: if STALE_LIMIT consecutive categories add zero new product IDs,
+// the category sweep ends and the reason is logged in progress.stop_reason.
+//
+// Incremental flush: onFlush (optional) is called every FLUSH_EVERY new
+// products so callers can persist a snapshot before the walk completes.
 
 import type { NormalizedProduct, RecentProduct, WalkProgress } from "./types";
 
-const SALLA_API = "https://api.salla.dev/store/v1";
-const UA =
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
-  "(KHTML, like Gecko) Chrome/124.0 Safari/537.36";
-const DELAY_MS  = 200;
+const SALLA_API   = "https://api.salla.dev/store/v1";
+const UA          = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
+                    "(KHTML, like Gecko) Chrome/124.0 Safari/537.36";
+const DELAY_MS    = 200;
 const MAX_RETRIES = 5;
 const MAX_ROUNDS  = 4;
+const STALE_LIMIT = 40;   // consecutive no-new-product categories → stop sweep
+const FLUSH_EVERY = 200;  // call onFlush each time this many new products accumulate
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 
@@ -24,7 +31,6 @@ function sleep(ms: number): Promise<void> {
 }
 
 function buildProductsUrl(source: string, sourceValues?: string[]): string {
-  // Use raw bracket notation — Salla's API expects `source_value[]=` unencoded.
   const parts = [`source=${source}`, "limit=50"];
   for (const v of sourceValues ?? []) parts.push(`source_value[]=${v}`);
   return `${SALLA_API}/products?${parts.join("&")}`;
@@ -32,6 +38,12 @@ function buildProductsUrl(source: string, sourceValues?: string[]): string {
 
 function extractCatId(url: string): string | null {
   return url.match(/\/c(\d+)/)?.[1] ?? null;
+}
+
+function countCatIds(catUrlSet: Set<string>): number {
+  let n = 0;
+  for (const u of catUrlSet) { if (extractCatId(u)) n++; }
+  return n;
 }
 
 // ── Salla API fetcher with retry / 429 backoff ────────────────────────────────
@@ -135,7 +147,7 @@ function normalizeProduct(raw: Record<string, any>, foundVia: string): Normalize
   const regularPrice = extractPrice(raw.regular_price);
 
   return {
-    salla_id:        Number(raw.id),   // source=latest returns id as string; options as number
+    salla_id:        Number(raw.id),
     name:            String(raw.name ?? ""),
     sku:             (raw.sku as string | null) || null,
     mpn:             (raw.mpn as string | null) || null,
@@ -146,7 +158,7 @@ function normalizeProduct(raw: Record<string, any>, foundVia: string): Normalize
     image:           (raw.image as { url?: string } | null)?.url
                        ?? (raw.original_image as string | null)
                        ?? null,
-    images:          [],  // enriched by gallery pass
+    images:          [],
     brand:           (raw.brand as { name: string } | null)?.name ?? null,
     brand_id:        (raw.brand as { id: number | string } | null)?.id != null
                        ? Number((raw.brand as { id: number | string }).id)
@@ -167,11 +179,11 @@ function normalizeProduct(raw: Record<string, any>, foundVia: string): Normalize
 // ── Cursor walker ─────────────────────────────────────────────────────────────
 
 async function walkCursor(
-  storeId:   string,
-  startUrl:  string,
-  foundVia:  string,
-  products:  Map<number, NormalizedProduct>,
-  progress:  WalkProgress,
+  storeId:    string,
+  startUrl:   string,
+  foundVia:   string,
+  products:   Map<number, NormalizedProduct>,
+  progress:   WalkProgress,
   onProgress: (p: WalkProgress) => Promise<void>,
 ): Promise<number> {
   let added = 0;
@@ -182,7 +194,7 @@ async function walkCursor(
     progress.request_count++;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const data = (await sallaFetch(storeId, nextUrl)) as Record<string, any>;
+    const data  = (await sallaFetch(storeId, nextUrl)) as Record<string, any>;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const items: Record<string, any>[] = (data?.data as Record<string, any>[]) ?? [];
 
@@ -193,7 +205,6 @@ async function walkCursor(
         products.set(id, np);
         added++;
         progress.products_found = products.size;
-        // Rolling 50-item buffer for the live popup feed
         const entry: RecentProduct = {
           salla_id: np.salla_id, name: np.name, sku: np.sku,
           price: np.price, currency: np.currency, image: np.image,
@@ -215,25 +226,61 @@ async function walkCursor(
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
+export interface WalkOpts {
+  /** Called every FLUSH_EVERY new products with the full snapshot so far. */
+  onFlush?: (products: NormalizedProduct[]) => Promise<void>;
+  /** Resume from a prior checkpoint (skips already-walked categories/brands). */
+  resume?: {
+    walkedCatIds:   string[];
+    walkedBrandIds: number[];
+    knownProducts:  NormalizedProduct[];
+  };
+}
+
 export async function walkStore(
-  storeId:        string,
+  storeId:         string,
   homepageCatUrls: string[],
-  onProgress:     (p: WalkProgress) => Promise<void>,
+  onProgress:      (p: WalkProgress) => Promise<void>,
+  opts:            WalkOpts = {},
 ): Promise<NormalizedProduct[]> {
-  const products = new Map<number, NormalizedProduct>();
+  const { onFlush, resume } = opts;
+
+  const products = new Map<number, NormalizedProduct>(
+    resume?.knownProducts.map(p => [p.salla_id, p]) ?? [],
+  );
+
   const progress: WalkProgress = {
     phase:               "latest",
-    products_found:      0,
+    products_found:      products.size,
     images_found:        0,
     request_count:       0,
-    categories_crawled:  [],
-    brands_crawled:      [],
+    categories_crawled:  resume?.walkedCatIds  ?? [],
+    brands_crawled:      resume?.walkedBrandIds.map(String) ?? [],
+    category_index:      resume?.walkedCatIds.length ?? 0,
+    category_total:      0,
+    walked_cat_ids:      resume?.walkedCatIds  ?? [],
+    walked_brand_ids:    resume?.walkedBrandIds ?? [],
   };
 
   await onProgress({ ...progress });
 
+  // ── Incremental flush tracker ─────────────────────────────────────────────
+  let lastFlushedCount = products.size;
+  async function maybeFlush() {
+    if (!onFlush) return;
+    if (products.size - lastFlushedCount >= FLUSH_EVERY) {
+      lastFlushedCount = products.size;
+      progress.walked_cat_ids   = [...walkedCatIds];
+      progress.walked_brand_ids = [...walkedBrandIds];
+      await onFlush([...products.values()]);
+    }
+  }
+
   // ── Axis 1: source=latest ─────────────────────────────────────────────────
-  await walkCursor(storeId, buildProductsUrl("latest"), "latest", products, progress, onProgress);
+  if (!resume) {
+    await walkCursor(storeId, buildProductsUrl("latest"), "latest", products, progress, onProgress);
+    await maybeFlush();
+  }
 
   // ── Crawl category HTML pages for sub-category IDs (one level deep) ───────
   progress.phase = "crawling-categories";
@@ -247,24 +294,36 @@ export async function walkStore(
   }
 
   // ── Axes 2–4: categories → brands, repeated ───────────────────────────────
-  const walkedCatIds  = new Set<string>();
-  const walkedBrandIds = new Set<number>();
+  const walkedCatIds   = new Set<string>(resume?.walkedCatIds   ?? []);
+  const walkedBrandIds = new Set<number>(resume?.walkedBrandIds ?? []);
+
+  let dryStreak = 0;
+  let stoppedEarly = false;
 
   for (let round = 0; round < MAX_ROUNDS; round++) {
+    if (stoppedEarly) break;
     let roundAdded = 0;
 
-    // Mine category URLs from already-found products (in case API returned them)
+    // Mine category URLs from already-found products
     for (const p of products.values()) {
       if (p.category_url) catUrlSet.add(p.category_url);
     }
 
+    // Update total known categories before this batch
+    progress.category_total = countCatIds(catUrlSet);
+
     // Walk unseen categories
     for (const catUrl of catUrlSet) {
+      if (stoppedEarly) break;
       const catId = extractCatId(catUrl);
       if (!catId || walkedCatIds.has(catId)) continue;
       walkedCatIds.add(catId);
+
       progress.categories_crawled = [...walkedCatIds];
-      progress.phase = `category:${catId}`;
+      progress.category_index     = walkedCatIds.size;
+      progress.category_total     = countCatIds(catUrlSet);
+      progress.phase              = `category:${catId}`;
+      progress.walked_cat_ids     = [...walkedCatIds];
       await onProgress({ ...progress });
 
       const added = await walkCursor(
@@ -274,14 +333,25 @@ export async function walkStore(
         products, progress, onProgress,
       );
       roundAdded += added;
+      await maybeFlush();
+
+      if (added === 0) {
+        dryStreak++;
+        if (dryStreak >= STALE_LIMIT) {
+          const reason =
+            `${STALE_LIMIT} consecutive categories with no new products ` +
+            `(${walkedCatIds.size} of ${progress.category_total} walked)`;
+          progress.stop_reason = reason;
+          await onProgress({ ...progress });
+          stoppedEarly = true;
+          break;
+        }
+      } else {
+        dryStreak = 0;
+      }
     }
 
     // Mine brand IDs from all found products
-    for (const p of products.values()) {
-      if (p.brand_id !== null) walkedBrandIds; // collect below
-    }
-
-    // Walk unseen brands
     const allBrandIds = new Set<number>(
       [...products.values()].filter(p => p.brand_id !== null).map(p => p.brand_id as number),
     );
@@ -289,8 +359,9 @@ export async function walkStore(
     for (const brandId of allBrandIds) {
       if (walkedBrandIds.has(brandId)) continue;
       walkedBrandIds.add(brandId);
-      progress.brands_crawled = [...walkedBrandIds].map(String);
-      progress.phase = `brand:${brandId}`;
+      progress.brands_crawled   = [...walkedBrandIds].map(String);
+      progress.walked_brand_ids = [...walkedBrandIds];
+      progress.phase            = `brand:${brandId}`;
       await onProgress({ ...progress });
 
       const added = await walkCursor(
@@ -300,6 +371,7 @@ export async function walkStore(
         products, progress, onProgress,
       );
       roundAdded += added;
+      await maybeFlush();
     }
 
     if (roundAdded === 0) break;

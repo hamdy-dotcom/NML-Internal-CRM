@@ -28,6 +28,7 @@ import { walkStore }    from "../src/lib/salla/walker";
 import { enrichWithGallery } from "../src/lib/salla/gallery";
 import { importProducts } from "../src/lib/salla/importProducts";
 import type { WalkProgress, NormalizedProduct } from "../src/lib/salla/types";
+import type { WalkOpts } from "../src/lib/salla/walker";
 
 // ── Supabase client (service role) ────────────────────────────────────────────
 
@@ -67,16 +68,26 @@ async function updateProgress(jobId: string, progress: WalkProgress) {
   if (error) console.error(`[${jobId}] progress update failed:`, error.message);
 }
 
+// ── Resume checkpoint ────────────────────────────────────────────────────────
+
+interface ResumeCheckpoint {
+  walkedCatIds:   string[];
+  walkedBrandIds: number[];
+  knownProducts:  NormalizedProduct[];
+}
+
 // ── Job processor ─────────────────────────────────────────────────────────────
 
-async function processJob(job: {
-  id: string;
-  store_url: string;
-  merchant_id: string;
-  auto_import: boolean;
-}): Promise<void> {
+async function processJob(
+  job: { id: string; store_url: string; merchant_id: string; auto_import: boolean },
+  resume?: ResumeCheckpoint,
+): Promise<void> {
   const { id: jobId, store_url: storeUrl } = job;
-  console.log(`[${jobId}] Processing ${storeUrl}`);
+  if (resume) {
+    console.log(`[${jobId}] Resuming ${storeUrl} — ${resume.knownProducts.length} products already fetched, ${resume.walkedCatIds.length} categories walked`);
+  } else {
+    console.log(`[${jobId}] Processing ${storeUrl}`);
+  }
 
   await setJobStatus(jobId, "running", { store_id: null });
 
@@ -91,7 +102,7 @@ async function processJob(job: {
   await db.from("salla_fetch_jobs").update({ store_id: storeId }).eq("id", jobId);
   console.log(`[${jobId}] Resolved store ID: ${storeId}, ${categoryUrls.length} category URLs`);
 
-  // Progress callback — write at most every 500 ms OR when ≥25 new products arrive
+  // Progress callback — throttled to every 500 ms OR ≥25 new products
   let lastProgressSave = 0;
   let lastSavedCount   = 0;
   const onProgress = async (p: WalkProgress) => {
@@ -101,13 +112,45 @@ async function processJob(job: {
     lastProgressSave = now;
     lastSavedCount   = p.products_found;
     await updateProgress(jobId, p);
-    console.log(`[${jobId}] ${p.phase} — ${p.products_found} products, ${p.request_count} requests`);
+
+    // Structured log: show category X/N during category sweep, plain phase otherwise
+    if (p.category_index != null && p.category_total != null && p.category_total > 0) {
+      console.log(`[${jobId}] category ${p.category_index}/${p.category_total} · ${p.products_found.toLocaleString()} products · ${p.request_count.toLocaleString()} requests`);
+    } else {
+      console.log(`[${jobId}] ${p.phase} — ${p.products_found.toLocaleString()} products, ${p.request_count.toLocaleString()} requests`);
+    }
+
+    if (p.stop_reason) {
+      console.log(`[${jobId}] Category sweep stopped early: ${p.stop_reason}`);
+    }
+  };
+
+  // Incremental flush — write fetched_products every 200 new products
+  // so a crash or Ctrl+C doesn't lose hours of work.
+  const onFlush = async (snapshot: NormalizedProduct[]) => {
+    const { error } = await db
+      .from("salla_fetch_jobs")
+      .update({ fetched_products: snapshot })
+      .eq("id", jobId);
+    if (error) {
+      console.error(`[${jobId}] Incremental flush failed:`, error.message);
+    } else {
+      console.log(`[${jobId}] Incremental flush — ${snapshot.length.toLocaleString()} products persisted`);
+    }
   };
 
   // Step 2: walk the catalog
   let products: NormalizedProduct[];
   try {
-    products = await walkStore(storeId, categoryUrls, onProgress);
+    const walkOpts: WalkOpts = { onFlush };
+    if (resume) {
+      walkOpts.resume = {
+        walkedCatIds:   resume.walkedCatIds,
+        walkedBrandIds: resume.walkedBrandIds,
+        knownProducts:  resume.knownProducts,
+      };
+    }
+    products = await walkStore(storeId, categoryUrls, onProgress, walkOpts);
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Walk failed";
     await setJobStatus(jobId, "error", { error: msg });
@@ -162,12 +205,47 @@ async function processJob(job: {
 
 // ── Main polling loop ─────────────────────────────────────────────────────────
 
-async function claimNextJob(): Promise<{
+interface ClaimedJob {
   id: string;
   store_url: string;
   merchant_id: string;
   auto_import: boolean;
-} | null> {
+  resume?: ResumeCheckpoint;
+}
+
+async function claimNextJob(): Promise<ClaimedJob | null> {
+  // 1. Try to resume a previously-interrupted running job (has checkpoint data).
+  //    A running job with walked_cat_ids in its progress was abandoned mid-sweep.
+  const { data: running } = await db
+    .from("salla_fetch_jobs")
+    .select("id, store_url, merchant_id, auto_import, progress, fetched_products")
+    .eq("status", "running")
+    .order("created_at")
+    .limit(1);
+
+  const interruptedJob = running?.[0];
+  if (interruptedJob) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const prog = interruptedJob.progress as Record<string, any> | null;
+    const walkedCatIds   = (prog?.walked_cat_ids   as string[]  | undefined) ?? [];
+    const walkedBrandIds = (prog?.walked_brand_ids as number[]  | undefined) ?? [];
+    // Only resume if we have checkpoint data — otherwise the job may still be running elsewhere.
+    if (walkedCatIds.length > 0 || walkedBrandIds.length > 0) {
+      const knownProducts = (interruptedJob.fetched_products as NormalizedProduct[] | null) ?? [];
+      console.log(`[${interruptedJob.id}] Detected interrupted job with ${walkedCatIds.length} walked categories — resuming`);
+      return {
+        id:          interruptedJob.id,
+        store_url:   interruptedJob.store_url,
+        merchant_id: interruptedJob.merchant_id,
+        auto_import: interruptedJob.auto_import,
+        resume:      { walkedCatIds, walkedBrandIds, knownProducts },
+      };
+    }
+    // No checkpoint — another worker may still be processing it; skip.
+    return null;
+  }
+
+  // 2. Claim the oldest pending job.
   // Read-then-update optimistic claim (safe for a single worker).
   // For multi-worker setups, replace with a Postgres function using FOR UPDATE SKIP LOCKED.
   const { data: rows } = await db
@@ -184,20 +262,20 @@ async function claimNextJob(): Promise<{
     .from("salla_fetch_jobs")
     .update({ status: "running" })
     .eq("id", job.id)
-    .eq("status", "pending"); // only claim if still pending
+    .eq("status", "pending");
 
   return error ? null : job;
 }
 
 async function main() {
-  console.log("Salla worker v4 started (gallery: parentKey URL detection, dual-threshold throttle). Polling every 5 s…");
+  console.log("Salla worker v5 started (category progress, early-stop, incremental flush, resume). Polling every 5 s…");
 
   // eslint-disable-next-line no-constant-condition
   while (true) {
     const job = await claimNextJob();
     if (job) {
       try {
-        await processJob(job);
+        await processJob(job, job.resume);
       } catch (e) {
         console.error(`[${job.id}] Unhandled error:`, e);
         await setJobStatus(job.id, "error", {

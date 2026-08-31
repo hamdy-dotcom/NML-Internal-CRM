@@ -43,4 +43,11 @@ export interface WalkProgress {
   categories_crawled:  string[];
   brands_crawled:      string[];
   recent_products?:    RecentProduct[];  // rolling 50-item buffer for live popup feed
+  // Category sweep progress (set during category phase)
+  category_index?:     number;  // categories fully walked so far
+  category_total?:     number;  // total unique category IDs known (grows as discovered)
+  stop_reason?:        string;  // set when category sweep exits early
+  // Checkpoint data written each flush so a resumed job can skip what's done
+  walked_cat_ids?:     string[];
+  walked_brand_ids?:   number[];
 }
