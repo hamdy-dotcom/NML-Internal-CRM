@@ -359,6 +359,7 @@ function KanbanColumn({
         >
           {totalCount}
         </span>
+        <span style={{ fontSize: 10.5, color: "var(--ink-4)" }}>now</span>
       </div>
 
       {/* Drop area */}

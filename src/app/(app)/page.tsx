@@ -5,6 +5,10 @@ import ProgressRing from "@/components/ui/ProgressRing";
 import EmptyState from "@/components/ui/EmptyState";
 import type { MerchantStage, UserRole, VSpecialistPerformance } from "@/lib/database.types";
 import { STAGE_LABELS, fmtDate } from "@/lib/utils";
+import {
+  FUNNEL_STAGES, FUNNEL_SELECT, type FunnelRow, buildFunnelCounts,
+  SPECIALIST_COL_LABELS,
+} from "@/lib/metrics";
 
 // ── Date range helpers ─────────────────────────────────────────────────────
 
@@ -66,19 +70,14 @@ function TileRow({ tiles }: {
 
 // ── Funnel bar ─────────────────────────────────────────────────────────────
 
-const FUNNEL_STAGES: MerchantStage[] = [
-  "new", "assigned", "contacted", "interested",
-  "form_sent", "cta_completed", "onboarding", "active",
-];
-
-function FunnelBar({ counts }: { counts: Partial<Record<MerchantStage, number>> }) {
+function FunnelBar({ counts, rangeLabel }: { counts: Partial<Record<MerchantStage, number>>; rangeLabel?: string }) {
   const top = Math.max(counts["new"] ?? 0, 1);
   return (
     <div className="glass-panel" style={{ padding: "14px 16px", marginBottom: 20 }}>
       <div style={{ fontSize: 12, fontWeight: 500, color: "var(--ink-2)", marginBottom: 10 }}>
-        Pipeline funnel
+        Pipeline funnel — ever reached each stage
         <span style={{ fontSize: 11, fontWeight: 400, color: "var(--ink-4)", marginLeft: 8 }}>
-          ever reached each stage · conv % from previous
+          {rangeLabel ? `merchants added · ${rangeLabel}` : "all time"} · conv % from previous
         </span>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
@@ -109,37 +108,6 @@ function FunnelBar({ counts }: { counts: Partial<Record<MerchantStage, number>> 
 // Role dashboards
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ── Funnel helpers ────────────────────────────────────────────────────────────
-
-// One row per merchant: only the stage timestamp columns needed for the funnel.
-type FunnelRow = {
-  assigned_at:           string | null;
-  first_contact_at:      string | null;
-  interested_at:         string | null;
-  form_sent_at:          string | null;
-  cta_completed_at:      string | null;
-  onboarding_started_at: string | null;
-  activated_at:          string | null;
-};
-
-// Count how many merchants ever REACHED each stage (timestamp IS NOT NULL).
-// Counts are monotonically decreasing because each is a superset of the next.
-function buildFunnelCounts(rows: FunnelRow[]): Partial<Record<MerchantStage, number>> {
-  return {
-    new:           rows.length,
-    assigned:      rows.filter(r => r.assigned_at            != null).length,
-    contacted:     rows.filter(r => r.first_contact_at       != null).length,
-    interested:    rows.filter(r => r.interested_at          != null).length,
-    form_sent:     rows.filter(r => r.form_sent_at           != null).length,
-    cta_completed: rows.filter(r => r.cta_completed_at       != null).length,
-    onboarding:    rows.filter(r => r.onboarding_started_at  != null).length,
-    active:        rows.filter(r => r.activated_at           != null).length,
-  };
-}
-
-const FUNNEL_SELECT =
-  "assigned_at, first_contact_at, interested_at, form_sent_at, cta_completed_at, onboarding_started_at, activated_at";
-
 // ── Shapes for partial-select results ─────────────────────────────────────────
 
 type StageRow    = { stage: MerchantStage };
@@ -149,7 +117,7 @@ type OnboardingProgressRow = { id: string; merchant_id: string; progress: number
 type OverdueStepRow = { id: string; title: string; merchant_id: string; due_at: string | null };
 type OnboardingMerchantRow = { id: string; store_name: string; cta_completed_at: string | null };
 
-async function SpecialistDashboard({ userId, dateStart }: { userId: string; dateStart: string }) {
+async function SpecialistDashboard({ userId, dateStart, rangeLabel }: { userId: string; dateStart: string; rangeLabel: string }) {
   const supabase   = await createClient();
   const now        = new Date().toISOString();
   const monthStart = (() => { const d = new Date(); d.setDate(1); d.setHours(0,0,0,0); return d.toISOString(); })();
@@ -193,7 +161,7 @@ async function SpecialistDashboard({ userId, dateStart }: { userId: string; date
         { label: "Converted this month", value: converted ?? 0,  tint: "green" },
       ]} />
 
-      <FunnelBar counts={stageCounts} />
+      <FunnelBar counts={stageCounts} rangeLabel={rangeLabel} />
 
       <div className="glass-panel" style={{ padding: "14px 16px" }}>
         <div style={{ fontSize: 12, fontWeight: 500, color: "var(--ink-2)", marginBottom: 10 }}>Due now</div>
@@ -235,7 +203,7 @@ async function SpecialistDashboard({ userId, dateStart }: { userId: string; date
   );
 }
 
-async function ManagerDashboard({ userId: _userId, dateStart }: { userId: string; dateStart: string }) {
+async function ManagerDashboard({ userId: _userId, dateStart, rangeLabel }: { userId: string; dateStart: string; rangeLabel: string }) {
   const supabase = await createClient();
 
   const staleDate = new Date(Date.now() - 7 * 86_400_000).toISOString();
@@ -272,21 +240,24 @@ async function ManagerDashboard({ userId: _userId, dateStart }: { userId: string
         </div>
       )}
 
-      <FunnelBar counts={stageCounts} />
+      <FunnelBar counts={stageCounts} rangeLabel={rangeLabel} />
 
       {specialists.length > 0 && (
         <div className="glass-panel" style={{ padding: "14px 16px", marginBottom: 20 }}>
-          <div style={{ fontSize: 12, fontWeight: 500, color: "var(--ink-2)", marginBottom: 10 }}>Specialist performance</div>
+          <div style={{ fontSize: 12, fontWeight: 500, color: "var(--ink-2)", marginBottom: 4 }}>
+            Specialist performance
+            <span style={{ fontSize: 11, fontWeight: 400, color: "var(--ink-4)", marginLeft: 8 }}>all time · ever reached each stage</span>
+          </div>
           <div style={{ overflowX: "auto" }}>
             <table className="nml-table">
               <thead>
                 <tr>
                   <th>Name</th>
                   <th>Open now</th>
-                  <th>Assigned</th>
-                  <th>Contacts</th>
-                  <th>Forms sent</th>
-                  <th>CTA done</th>
+                  <th>{SPECIALIST_COL_LABELS.assigned}</th>
+                  <th>{SPECIALIST_COL_LABELS.contacted}</th>
+                  <th>{SPECIALIST_COL_LABELS.form_sent}</th>
+                  <th>{SPECIALIST_COL_LABELS.cta_done}</th>
                   <th>Conversion %</th>
                   <th>Avg days to CTA</th>
                 </tr>
@@ -563,10 +534,10 @@ export default async function DashboardPage({ searchParams }: Props) {
       </div>
 
       {role === "acq_specialist" && (
-        <SpecialistDashboard userId={user!.id} dateStart={dateStart} />
+        <SpecialistDashboard userId={user!.id} dateStart={dateStart} rangeLabel={RANGE_LABELS[range]} />
       )}
       {(role === "acq_manager" || role === "admin") && (
-        <ManagerDashboard userId={user!.id} dateStart={dateStart} />
+        <ManagerDashboard userId={user!.id} dateStart={dateStart} rangeLabel={RANGE_LABELS[range]} />
       )}
       {role === "account_manager" && (
         <AccountManagerDashboard userId={user!.id} dateStart={dateStart} />
