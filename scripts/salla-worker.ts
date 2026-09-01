@@ -29,6 +29,7 @@ import { enrichWithGallery } from "../src/lib/salla/gallery";
 import { importProducts } from "../src/lib/salla/importProducts";
 import type { WalkProgress, NormalizedProduct } from "../src/lib/salla/types";
 import type { WalkOpts } from "../src/lib/salla/walker";
+import { HttpError } from "../src/lib/salla/walker";
 
 // ── Supabase client (service role) ────────────────────────────────────────────
 
@@ -94,7 +95,12 @@ async function processJob(
   // Step 1: resolve store ID
   const resolved = await resolveStore(storeUrl);
   if (!resolved) {
-    await setJobStatus(jobId, "error", { error: `Could not resolve Salla store ID from ${storeUrl}` });
+    // Could not find a store ID even after the custom-domain fallback.
+    // Mark as error so the team can investigate the URL.
+    await setJobStatus(jobId, "error", {
+      error: `Could not resolve Salla store ID from ${storeUrl}. ` +
+             `The store may use a custom domain — verify the URL or add the store-identifier manually.`,
+    });
     return;
   }
 
@@ -125,7 +131,7 @@ async function processJob(
     }
   };
 
-  // Incremental flush — write fetched_products every 200 new products
+  // Incremental flush — write fetched_products every 2000 new products
   // so a crash or Ctrl+C doesn't lose hours of work.
   const onFlush = async (snapshot: NormalizedProduct[]) => {
     const { error } = await db
@@ -141,6 +147,12 @@ async function processJob(
 
   // Step 2: walk the catalog
   let products: NormalizedProduct[];
+  let walkProgress: WalkProgress | undefined;
+  const captureProgress = async (p: WalkProgress) => {
+    walkProgress = p;
+    await onProgress(p);
+  };
+
   try {
     const walkOpts: WalkOpts = { onFlush };
     if (resume) {
@@ -150,24 +162,42 @@ async function processJob(
         knownProducts:  resume.knownProducts,
       };
     }
-    products = await walkStore(storeId, categoryUrls, onProgress, walkOpts);
+    products = await walkStore(storeId, categoryUrls, captureProgress, walkOpts);
   } catch (e) {
+    if (e instanceof HttpError && e.status === 410) {
+      // Store is gone — mark done (not error) so it isn't requeued.
+      console.warn(`[${jobId}] Store returned 410 Gone — marking done with 0 products`);
+      await setJobStatus(jobId, "done", {
+        fetched_products: [],
+        progress: { phase: "done", products_found: 0, images_found: 0, request_count: 0,
+                    categories_crawled: [], brands_crawled: [],
+                    stop_reason: "Store returned HTTP 410 Gone — store no longer exists" },
+      });
+      return;
+    }
+    // Any other walk failure (422 exhausted on first request, network error, etc.)
     const msg = e instanceof Error ? e.message : "Walk failed";
     await setJobStatus(jobId, "error", { error: msg });
     console.error(`[${jobId}] Walk error:`, msg);
     return;
   }
 
-  console.log(`[${jobId}] Walk complete — ${products.length} products`);
+  const partialReason = walkProgress?.stop_reason;
+  console.log(`[${jobId}] Walk ${partialReason ? "partial" : "complete"} — ${products.length} products${partialReason ? ` (${partialReason})` : ""}`);
 
   // Step 3: gallery pass
+  // Carry category coverage from the walk into the final progress so it's
+  // visible after the job completes, not only while it was running.
   const finalProgress: WalkProgress = {
-    phase: "gallery",
-    products_found: products.length,
-    images_found: 0,
-    request_count: 0,
-    categories_crawled: [],
-    brands_crawled: [],
+    phase:              "gallery",
+    products_found:     products.length,
+    images_found:       0,
+    request_count:      walkProgress?.request_count ?? 0,
+    categories_crawled: walkProgress?.categories_crawled ?? [],
+    brands_crawled:     walkProgress?.brands_crawled ?? [],
+    category_index:     walkProgress?.category_index,
+    category_total:     walkProgress?.category_total,
+    stop_reason:        walkProgress?.stop_reason,
   };
 
   try {

@@ -21,8 +21,8 @@ const UA          = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit
 const DELAY_MS    = 200;
 const MAX_RETRIES = 5;
 const MAX_ROUNDS  = 4;
-const STALE_LIMIT = 40;   // consecutive no-new-product categories → stop sweep
-const FLUSH_EVERY = 200;  // call onFlush each time this many new products accumulate
+const STALE_LIMIT = 40;    // consecutive no-new-product categories → stop sweep
+const FLUSH_EVERY = 2000;  // call onFlush each time this many new products accumulate
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 
@@ -46,13 +46,27 @@ function countCatIds(catUrlSet: Set<string>): number {
   return n;
 }
 
-// ── Salla API fetcher with retry / 429 backoff ────────────────────────────────
+// ── Typed HTTP errors ─────────────────────────────────────────────────────────
+
+export class HttpError extends Error {
+  constructor(public readonly status: number, url: string) {
+    super(`HTTP ${status}: ${url}`);
+  }
+}
+
+// ── Salla API fetcher with retry / 429 + 422 backoff ─────────────────────────
+//
+// 410  — store gone; thrown immediately, no retries (caller decides action).
+// 422  — transient API error; retried up to MAX_RETRIES with backoff.
+// 429  — rate-limit; retried with backoff (not counted as an attempt).
+// Other non-2xx — retried up to MAX_RETRIES, then thrown as HttpError.
 
 async function sallaFetch(storeId: string, url: string): Promise<unknown> {
   let backoff = 500;
   let lastErr: Error | null = null;
+  let attempt = 0;
 
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+  while (attempt < MAX_RETRIES) {
     if (attempt > 0) await sleep(backoff);
 
     try {
@@ -63,16 +77,30 @@ async function sallaFetch(storeId: string, url: string): Promise<unknown> {
 
       if (res.status === 429) {
         backoff = Math.min(backoff * 2, 8_000);
+        continue; // don't increment attempt — rate-limit is not an attempt
+      }
+      if (res.status === 410) throw new HttpError(410, url); // no retry
+      if (res.status === 422) {
+        lastErr = new HttpError(422, url);
+        attempt++;
+        backoff = Math.min(backoff * 2, 16_000);
         continue;
       }
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        lastErr = new HttpError(res.status, url);
+        attempt++;
+        backoff = Math.min(backoff * 2, 8_000);
+        continue;
+      }
       return await res.json();
     } catch (e) {
+      if (e instanceof HttpError && e.status === 410) throw e; // propagate immediately
       lastErr = e as Error;
+      attempt++;
       backoff = Math.min(backoff * 2, 8_000);
     }
   }
-  throw lastErr ?? new Error(`sallaFetch failed: ${url}`);
+  throw lastErr ?? new Error(`sallaFetch failed after ${MAX_RETRIES} attempts: ${url}`);
 }
 
 // ── HTML category-page crawler ────────────────────────────────────────────────
@@ -281,6 +309,7 @@ export async function walkStore(
   }
 
   // ── Axis 1: source=latest ─────────────────────────────────────────────────
+  // Any HttpError here propagates straight to processJob (no partial to save yet).
   if (!resume) {
     await walkCursor(storeId, buildProductsUrl("latest"), "latest", products, progress, onProgress);
     await maybeFlush();
@@ -328,12 +357,23 @@ export async function walkStore(
       progress.walked_cat_ids     = [...walkedCatIds];
       await onProgress({ ...progress });
 
-      const added = await walkCursor(
-        storeId,
-        buildProductsUrl("categories", [catId]),
-        `category:${catId}`,
-        products, progress, onProgress,
-      );
+      let added: number;
+      try {
+        added = await walkCursor(
+          storeId,
+          buildProductsUrl("categories", [catId]),
+          `category:${catId}`,
+          products, progress, onProgress,
+        );
+      } catch (e) {
+        if (e instanceof HttpError && e.status === 410) throw e; // store gone — propagate
+        // 422 or other transient error mid-sweep: record partial coverage and stop.
+        const reason = `Stopped at category ${walkedCatIds.size}/${progress.category_total ?? "?"} — ${e instanceof Error ? e.message : String(e)}`;
+        progress.stop_reason = reason;
+        await onProgress({ ...progress });
+        stoppedEarly = true;
+        break;
+      }
       roundAdded += added;
       await maybeFlush();
 
@@ -366,12 +406,20 @@ export async function walkStore(
       progress.phase            = `brand:${brandId}`;
       await onProgress({ ...progress });
 
-      const added = await walkCursor(
-        storeId,
-        buildProductsUrl("brands", [String(brandId)]),
-        `brand:${brandId}`,
-        products, progress, onProgress,
-      );
+      let added: number;
+      try {
+        added = await walkCursor(
+          storeId,
+          buildProductsUrl("brands", [String(brandId)]),
+          `brand:${brandId}`,
+          products, progress, onProgress,
+        );
+      } catch (e) {
+        if (e instanceof HttpError && e.status === 410) throw e;
+        // Brand walk failed — log and continue to next brand.
+        console.warn(`brand:${brandId} walk failed — ${e instanceof Error ? e.message : e}; skipping`);
+        added = 0;
+      }
       roundAdded += added;
       await maybeFlush();
     }
