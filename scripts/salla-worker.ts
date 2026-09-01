@@ -214,38 +214,7 @@ interface ClaimedJob {
 }
 
 async function claimNextJob(): Promise<ClaimedJob | null> {
-  // 1. Try to resume a previously-interrupted running job (has checkpoint data).
-  //    A running job with walked_cat_ids in its progress was abandoned mid-sweep.
-  const { data: running } = await db
-    .from("salla_fetch_jobs")
-    .select("id, store_url, merchant_id, auto_import, progress, fetched_products")
-    .eq("status", "running")
-    .order("created_at")
-    .limit(1);
-
-  const interruptedJob = running?.[0];
-  if (interruptedJob) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const prog = interruptedJob.progress as Record<string, any> | null;
-    const walkedCatIds   = (prog?.walked_cat_ids   as string[]  | undefined) ?? [];
-    const walkedBrandIds = (prog?.walked_brand_ids as number[]  | undefined) ?? [];
-    // Only resume if we have checkpoint data — otherwise the job may still be running elsewhere.
-    if (walkedCatIds.length > 0 || walkedBrandIds.length > 0) {
-      const knownProducts = (interruptedJob.fetched_products as NormalizedProduct[] | null) ?? [];
-      console.log(`[${interruptedJob.id}] Detected interrupted job with ${walkedCatIds.length} walked categories — resuming`);
-      return {
-        id:          interruptedJob.id,
-        store_url:   interruptedJob.store_url,
-        merchant_id: interruptedJob.merchant_id,
-        auto_import: interruptedJob.auto_import,
-        resume:      { walkedCatIds, walkedBrandIds, knownProducts },
-      };
-    }
-    // No checkpoint — another worker may still be processing it; skip.
-    return null;
-  }
-
-  // 2. Claim the oldest pending job.
+  // 1. Claim the oldest pending job (normal path — always tried first).
   // Read-then-update optimistic claim (safe for a single worker).
   // For multi-worker setups, replace with a Postgres function using FOR UPDATE SKIP LOCKED.
   const { data: rows } = await db
@@ -255,16 +224,44 @@ async function claimNextJob(): Promise<ClaimedJob | null> {
     .order("created_at")
     .limit(1);
 
-  const job = rows?.[0];
-  if (!job) return null;
+  const pendingJob = rows?.[0];
+  if (pendingJob) {
+    const { error } = await db
+      .from("salla_fetch_jobs")
+      .update({ status: "running" })
+      .eq("id", pendingJob.id)
+      .eq("status", "pending");
+    return error ? null : pendingJob;
+  }
 
-  const { error } = await db
+  // 2. No pending jobs — try to resume an interrupted running job that has
+  //    checkpoint data (walked_cat_ids set). A running job without checkpoint
+  //    data is assumed to be live on another worker; leave it alone.
+  const { data: running } = await db
     .from("salla_fetch_jobs")
-    .update({ status: "running" })
-    .eq("id", job.id)
-    .eq("status", "pending");
+    .select("id, store_url, merchant_id, auto_import, progress, fetched_products")
+    .eq("status", "running")
+    .order("created_at")
+    .limit(1);
 
-  return error ? null : job;
+  const interruptedJob = running?.[0];
+  if (!interruptedJob) return null;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const prog = interruptedJob.progress as Record<string, any> | null;
+  const walkedCatIds   = (prog?.walked_cat_ids   as string[]  | undefined) ?? [];
+  const walkedBrandIds = (prog?.walked_brand_ids as number[]  | undefined) ?? [];
+  if (walkedCatIds.length === 0 && walkedBrandIds.length === 0) return null;
+
+  const knownProducts = (interruptedJob.fetched_products as NormalizedProduct[] | null) ?? [];
+  console.log(`[${interruptedJob.id}] Detected interrupted job with ${walkedCatIds.length} walked categories — resuming`);
+  return {
+    id:          interruptedJob.id,
+    store_url:   interruptedJob.store_url,
+    merchant_id: interruptedJob.merchant_id,
+    auto_import: interruptedJob.auto_import,
+    resume:      { walkedCatIds, walkedBrandIds, knownProducts },
+  };
 }
 
 async function main() {

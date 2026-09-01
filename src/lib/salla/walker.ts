@@ -264,6 +264,10 @@ export async function walkStore(
 
   await onProgress({ ...progress });
 
+  // Declare before maybeFlush so the closure doesn't hit the TDZ.
+  const walkedCatIds   = new Set<string>(resume?.walkedCatIds   ?? []);
+  const walkedBrandIds = new Set<number>(resume?.walkedBrandIds ?? []);
+
   // ── Incremental flush tracker ─────────────────────────────────────────────
   let lastFlushedCount = products.size;
   async function maybeFlush() {
@@ -294,8 +298,6 @@ export async function walkStore(
   }
 
   // ── Axes 2–4: categories → brands, repeated ───────────────────────────────
-  const walkedCatIds   = new Set<string>(resume?.walkedCatIds   ?? []);
-  const walkedBrandIds = new Set<number>(resume?.walkedBrandIds ?? []);
 
   let dryStreak = 0;
   let stoppedEarly = false;
