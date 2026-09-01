@@ -23,9 +23,14 @@ export default function LoginForm() {
     });
     setLoading(false);
     if (err) {
-      setError(err.message === "Invalid login credentials"
-        ? "Incorrect email or password"
-        : err.message);
+      const msg = err.message;
+      setError(
+        msg === "Invalid login credentials"
+          ? "Incorrect email or password"
+          : msg === "Failed to fetch" || msg.includes("fetch")
+            ? "Could not connect to the server — check your internet connection and try again"
+            : msg,
+      );
       return;
     }
     router.push("/");
