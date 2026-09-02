@@ -7,9 +7,14 @@
 //   4. source=brands      — walk each brand ID mined from found products
 //   5. Repeat 3–4 up to MAX_ROUNDS, stop when a round adds nothing new
 //
-// Early-stop conditions (either triggers):
-//   A. Yield rate: after YIELD_WINDOW categories, if sweepNew/sweepReqs < YIELD_MIN_RATE
-//   B. Dry streak: STALE_LIMIT consecutive categories with zero new products
+// Sweep skip: if latest returns > LATEST_RICH_THRESHOLD products the category +
+//   brand sweeps are skipped entirely (the sweep exists only to work around the
+//   ~636-product cap on small stores; large stores are already covered by latest).
+//
+// Hard ceiling: any job that makes more than REQUEST_CEILING total requests stops
+//   immediately with stop_reason "request ceiling".
+//
+// Early-stop: dry streak of STALE_LIMIT consecutive zero-yield categories.
 //
 // Category skip: if the Salla category listing reports N products for a category
 //   and we already hold N products tagged to that catId, the walk is skipped.
@@ -21,14 +26,14 @@ import type { NormalizedProduct, RecentProduct, WalkProgress } from "./types";
 const SALLA_API    = "https://api.salla.dev/store/v1";
 const UA           = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
                      "(KHTML, like Gecko) Chrome/124.0 Safari/537.36";
-const DEFAULT_DELAY = 100;  // ms between requests; auto-backs off on 429
-const MAX_RETRIES   = 5;
-const MAX_ROUNDS    = 4;
-const STALE_LIMIT   = 40;    // consecutive zero-yield categories → stop
-const FLUSH_EVERY   = 2000;  // call onFlush each time this many new products accumulate
-const CAT_CONCURRENCY = 4;   // parallel category walks (shared seen-set)
-const YIELD_WINDOW  = 20;    // check yield rate after this many categories walked
-const YIELD_MIN_RATE = 1 / 50; // min new products per request to keep sweeping
+const DEFAULT_DELAY          = 100;    // ms between requests; auto-backs off on 429
+const MAX_RETRIES            = 5;
+const MAX_ROUNDS             = 4;
+const STALE_LIMIT            = 40;    // consecutive zero-yield categories → stop
+const FLUSH_EVERY            = 2000;  // call onFlush each time this many new products accumulate
+const CAT_CONCURRENCY        = 4;     // parallel category walks (shared seen-set)
+const LATEST_RICH_THRESHOLD  = 2_000; // skip sweeps when latest yields more than this
+const REQUEST_CEILING        = 3_000; // hard stop: no single job exceeds this many requests
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 
@@ -305,6 +310,10 @@ async function walkCursor(
 
   while (nextUrl) {
     if (stop.stopped) break; // exit immediately when the sweep is aborted
+    if (progress.request_count >= REQUEST_CEILING) {
+      stop.stopped = true; // signal all concurrent walkers to stop
+      break;
+    }
     progress.request_count++;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -433,6 +442,21 @@ export async function walkStore(
     await maybeFlush();
   }
 
+  // ── Ceiling / sweep-skip gate ─────────────────────────────────────────────
+  // Stop immediately if the hard request ceiling was hit during latest.
+  if (stopSignal.stopped) {
+    progress.stop_reason = `request ceiling reached (${progress.request_count.toLocaleString()} requests)`;
+    await onProgress({ ...progress });
+    return [...products.values()];
+  }
+  // Skip category + brand sweeps when latest already found enough products:
+  // the sweep exists only to work around the ~636-product cap on small stores.
+  if (products.size > LATEST_RICH_THRESHOLD) {
+    progress.stop_reason = "latest pass complete, sweep skipped";
+    await onProgress({ ...progress });
+    return [...products.values()];
+  }
+
   // ── Crawl category HTML pages for sub-category IDs (one level deep) ───────
   progress.phase = "crawling-categories";
   await onProgress({ ...progress });
@@ -484,10 +508,6 @@ export async function walkStore(
       pending.push({ catId });
     }
 
-    // Yield-rate tracking across the sweep
-    const sweepStartReqs = progress.request_count;
-    let sweepNew  = 0;
-    let catsCompleted = 0;
     let dryStreak = 0;
 
     await runPool(pending, CAT_CONCURRENCY, async ({ catId }) => {
@@ -506,9 +526,14 @@ export async function walkStore(
           `category:${catId}`,
           products, progress, onProgress, rate, stopSignal,
         );
+        // Ceiling hit inside walkCursor — propagate as early stop.
+        if (stopSignal.stopped && !stoppedEarly && !progress.stop_reason) {
+          progress.stop_reason = `request ceiling reached (${progress.request_count.toLocaleString()} requests)`;
+          await onProgress({ ...progress });
+          stoppedEarly = true;
+        }
       } catch (e) {
         if (e instanceof HttpError && e.status === 410) throw e;
-        // Transient error mid-sweep: record partial coverage and stop.
         const reason =
           `Stopped at category ${walkedCatIds.size}/${progress.category_total ?? "?"} ` +
           `— ${e instanceof Error ? e.message : String(e)}`;
@@ -519,8 +544,6 @@ export async function walkStore(
       }
 
       roundAdded += added;
-      sweepNew   += added;
-      catsCompleted++;
       await maybeFlush();
 
       // Dry-streak check (resets on any yield)
@@ -537,25 +560,9 @@ export async function walkStore(
       } else {
         dryStreak = 0;
       }
-
-      // Yield-rate check: after YIELD_WINDOW categories walked this sweep,
-      // stop if new-products-per-request has dropped below YIELD_MIN_RATE.
-      if (!stoppedEarly && catsCompleted >= YIELD_WINDOW) {
-        const sweepReqs = progress.request_count - sweepStartReqs;
-        if (sweepReqs > 0) {
-          const yieldRate = sweepNew / sweepReqs;
-          if (yieldRate < YIELD_MIN_RATE) {
-            const reason =
-              `Yield rate ${yieldRate.toFixed(4)} new products/request ` +
-              `(${sweepNew} new / ${sweepReqs} requests over ${catsCompleted} categories) ` +
-              `fell below threshold ${YIELD_MIN_RATE} — stopping category sweep`;
-            progress.stop_reason = reason;
-            await onProgress({ ...progress });
-            stoppedEarly = true; stopSignal.stopped = true;
-          }
-        }
-      }
     }, () => stoppedEarly);
+
+    if (stoppedEarly) break;
 
     // Mine brand IDs from all found products
     const allBrandIds = new Set<number>(
@@ -580,6 +587,12 @@ export async function walkStore(
           `brand:${brandId}`,
           products, progress, onProgress, rate, stopSignal,
         );
+        // Ceiling hit inside walkCursor during brand walk.
+        if (stopSignal.stopped && !stoppedEarly && !progress.stop_reason) {
+          progress.stop_reason = `request ceiling reached (${progress.request_count.toLocaleString()} requests)`;
+          await onProgress({ ...progress });
+          stoppedEarly = true;
+        }
       } catch (e) {
         if (e instanceof HttpError && e.status === 410) throw e;
         console.warn(`brand:${brandId} walk failed — ${e instanceof Error ? e.message : e}; skipping`);
@@ -587,6 +600,7 @@ export async function walkStore(
       }
       roundAdded += added;
       await maybeFlush();
+      if (stoppedEarly) break;
     }
 
     if (roundAdded === 0) break;
