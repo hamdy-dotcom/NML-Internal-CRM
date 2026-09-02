@@ -51,7 +51,7 @@ function sleep(ms: number): Promise<void> {
 
 async function setJobStatus(
   jobId:  string,
-  status: "running" | "done" | "error",
+  status: "pending" | "running" | "done" | "error",
   extra:  Record<string, unknown> = {},
 ) {
   const { error } = await db
@@ -111,6 +111,7 @@ async function processJob(
   // Progress callback — throttled to every 500 ms OR ≥25 new products
   let lastProgressSave = 0;
   let lastSavedCount   = 0;
+  let stopReasonLogged = false; // guard: log stop_reason exactly once
   const onProgress = async (p: WalkProgress) => {
     const now         = Date.now();
     const newProducts = p.products_found - lastSavedCount;
@@ -126,7 +127,8 @@ async function processJob(
       console.log(`[${jobId}] ${p.phase} — ${p.products_found.toLocaleString()} products, ${p.request_count.toLocaleString()} requests`);
     }
 
-    if (p.stop_reason) {
+    if (p.stop_reason && !stopReasonLogged) {
+      stopReasonLogged = true;
       console.log(`[${jobId}] Category sweep stopped early: ${p.stop_reason}`);
     }
   };
@@ -294,8 +296,68 @@ async function claimNextJob(): Promise<ClaimedJob | null> {
   };
 }
 
+// ── Startup reclaim ───────────────────────────────────────────────────────────
+// On boot, any `running` job older than 10 minutes is stale (worker was killed).
+// If the merchant already has products in the CRM → mark done (products survived).
+// If no products yet → reset to pending so the job is retried from scratch.
+
+async function reclaimStaleJobs(): Promise<void> {
+  const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+
+  const { data: staleJobs, error } = await db
+    .from("salla_fetch_jobs")
+    .select("id, merchant_id, progress, fetched_products")
+    .eq("status", "running")
+    .lt("updated_at", tenMinutesAgo);
+
+  if (error) {
+    console.error("[reclaim] Failed to query stale jobs:", error.message);
+    return;
+  }
+  if (!staleJobs || staleJobs.length === 0) {
+    console.log("[reclaim] No stale running jobs found");
+    return;
+  }
+
+  console.log(`[reclaim] Found ${staleJobs.length} stale running job(s) — reclaiming…`);
+
+  // Fetch product counts for affected merchants in one query
+  const merchantIds = staleJobs.map((j: { merchant_id: string }) => j.merchant_id);
+  const { data: productRows } = await db
+    .from("v_merchant_product_counts")
+    .select("merchant_id, product_count")
+    .in("merchant_id", merchantIds);
+
+  const productCountById: Record<string, number> = {};
+  for (const r of (productRows ?? [])) {
+    productCountById[r.merchant_id] = r.product_count;
+  }
+
+  for (const job of staleJobs) {
+    const hasProducts = (productCountById[job.merchant_id] ?? 0) > 0;
+
+    if (hasProducts) {
+      // Products were imported before the crash — call it done
+      const products = (job.fetched_products as NormalizedProduct[] | null) ?? [];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const prog = (job.progress as Record<string, any> | null) ?? {};
+      await setJobStatus(job.id, "done", {
+        fetched_products: products,
+        progress: { ...prog, phase: "done", stop_reason: prog.stop_reason ?? "Worker restarted — reclaimed on boot" },
+      });
+      console.log(`[reclaim] Job ${job.id} → done (merchant already has products)`);
+    } else {
+      // No products were imported — reset so the job runs fresh
+      await setJobStatus(job.id, "pending", { progress: {} });
+      console.log(`[reclaim] Job ${job.id} → pending (no products — will retry)`);
+    }
+  }
+}
+
 async function main() {
   console.log("Salla worker v5 started (category progress, early-stop, incremental flush, resume). Polling every 5 s…");
+
+  await reclaimStaleJobs();
 
   // eslint-disable-next-line no-constant-condition
   while (true) {

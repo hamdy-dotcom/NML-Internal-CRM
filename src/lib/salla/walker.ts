@@ -3,26 +3,32 @@
 // Axes (per brief §3):
 //   1. source=latest      — walk cursor to exhaustion
 //   2. HTML cat crawl     — mine sub-category IDs from category page HTML
-//   3. source=categories  — walk each category ID
+//   3. source=categories  — walk each category ID (4 concurrent, shared seen-set)
 //   4. source=brands      — walk each brand ID mined from found products
 //   5. Repeat 3–4 up to MAX_ROUNDS, stop when a round adds nothing new
 //
-// Early-stop: if STALE_LIMIT consecutive categories add zero new product IDs,
-// the category sweep ends and the reason is logged in progress.stop_reason.
+// Early-stop conditions (either triggers):
+//   A. Yield rate: after YIELD_WINDOW categories, if sweepNew/sweepReqs < YIELD_MIN_RATE
+//   B. Dry streak: STALE_LIMIT consecutive categories with zero new products
 //
-// Incremental flush: onFlush (optional) is called every FLUSH_EVERY new
-// products so callers can persist a snapshot before the walk completes.
+// Category skip: if the Salla category listing reports N products for a category
+//   and we already hold N products tagged to that catId, the walk is skipped.
+//
+// Incremental flush: onFlush (optional) is called every FLUSH_EVERY new products.
 
 import type { NormalizedProduct, RecentProduct, WalkProgress } from "./types";
 
-const SALLA_API   = "https://api.salla.dev/store/v1";
-const UA          = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
-                    "(KHTML, like Gecko) Chrome/124.0 Safari/537.36";
-const DELAY_MS    = 200;
-const MAX_RETRIES = 5;
-const MAX_ROUNDS  = 4;
-const STALE_LIMIT = 40;    // consecutive no-new-product categories → stop sweep
-const FLUSH_EVERY = 2000;  // call onFlush each time this many new products accumulate
+const SALLA_API    = "https://api.salla.dev/store/v1";
+const UA           = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
+                     "(KHTML, like Gecko) Chrome/124.0 Safari/537.36";
+const DEFAULT_DELAY = 100;  // ms between requests; auto-backs off on 429
+const MAX_RETRIES   = 5;
+const MAX_ROUNDS    = 4;
+const STALE_LIMIT   = 40;    // consecutive zero-yield categories → stop
+const FLUSH_EVERY   = 2000;  // call onFlush each time this many new products accumulate
+const CAT_CONCURRENCY = 4;   // parallel category walks (shared seen-set)
+const YIELD_WINDOW  = 20;    // check yield rate after this many categories walked
+const YIELD_MIN_RATE = 1 / 50; // min new products per request to keep sweeping
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 
@@ -46,6 +52,12 @@ function countCatIds(catUrlSet: Set<string>): number {
   return n;
 }
 
+// ── Stop signal ───────────────────────────────────────────────────────────────
+// A shared mutable object threaded into walkCursor so in-flight page iterations
+// halt within one request (≤ delayMs + one fetch timeout) once stoppedEarly fires.
+
+interface StopSignal { stopped: boolean }
+
 // ── Typed HTTP errors ─────────────────────────────────────────────────────────
 
 export class HttpError extends Error {
@@ -54,20 +66,46 @@ export class HttpError extends Error {
   }
 }
 
+// ── Shared rate state ─────────────────────────────────────────────────────────
+// All concurrent walkCursor calls share one RateState so a 429 on any request
+// backs off the whole batch, not just the one that was rate-limited.
+
+interface RateState {
+  delayMs: number;   // current inter-request delay
+  minMs:   number;   // floor (the configured baseline)
+}
+
+function onRateLimit(rate: RateState) {
+  rate.delayMs = Math.min(rate.delayMs * 2, 8_000);
+}
+
+function onRequestSuccess(rate: RateState) {
+  // Slowly recover toward the minimum after successful requests.
+  if (rate.delayMs > rate.minMs) {
+    rate.delayMs = Math.max(rate.delayMs * 0.9, rate.minMs);
+  }
+}
+
 // ── Salla API fetcher with retry / 429 + 422 backoff ─────────────────────────
 //
 // 410  — store gone; thrown immediately, no retries (caller decides action).
-// 422  — transient API error; retried up to MAX_RETRIES with backoff.
-// 429  — rate-limit; retried with backoff (not counted as an attempt).
+// 422  — transient API error; retried up to MAX_RETRIES with local backoff.
+// 429  — rate-limit; retried with backoff, rate.delayMs raised globally.
 // Other non-2xx — retried up to MAX_RETRIES, then thrown as HttpError.
 
-async function sallaFetch(storeId: string, url: string): Promise<unknown> {
-  let backoff = 500;
+async function sallaFetch(
+  storeId: string,
+  url:     string,
+  rate:    RateState,
+): Promise<unknown> {
+  await sleep(rate.delayMs);
+
+  let localBackoff = 500;
   let lastErr: Error | null = null;
   let attempt = 0;
 
   while (attempt < MAX_RETRIES) {
-    if (attempt > 0) await sleep(backoff);
+    if (attempt > 0) await sleep(localBackoff);
 
     try {
       const res = await fetch(url, {
@@ -76,30 +114,35 @@ async function sallaFetch(storeId: string, url: string): Promise<unknown> {
       });
 
       if (res.status === 429) {
-        backoff = Math.min(backoff * 2, 8_000);
-        continue; // don't increment attempt — rate-limit is not an attempt
+        onRateLimit(rate);
+        localBackoff = Math.min(localBackoff * 2, 8_000);
+        await sleep(rate.delayMs); // shared backoff on top of local
+        continue; // don't count as an attempt
       }
       if (res.status === 410) throw new HttpError(410, url); // no retry
       if (res.status === 422) {
         lastErr = new HttpError(422, url);
         attempt++;
-        backoff = Math.min(backoff * 2, 16_000);
+        localBackoff = Math.min(localBackoff * 2, 16_000);
         continue;
       }
       if (!res.ok) {
         lastErr = new HttpError(res.status, url);
         attempt++;
-        backoff = Math.min(backoff * 2, 8_000);
+        localBackoff = Math.min(localBackoff * 2, 8_000);
         continue;
       }
+
+      onRequestSuccess(rate);
       return await res.json();
     } catch (e) {
-      if (e instanceof HttpError && e.status === 410) throw e; // propagate immediately
+      if (e instanceof HttpError && e.status === 410) throw e;
       lastErr = e as Error;
       attempt++;
-      backoff = Math.min(backoff * 2, 8_000);
+      localBackoff = Math.min(localBackoff * 2, 8_000);
     }
   }
+
   throw lastErr ?? new Error(`sallaFetch failed after ${MAX_RETRIES} attempts: ${url}`);
 }
 
@@ -107,7 +150,7 @@ async function sallaFetch(storeId: string, url: string): Promise<unknown> {
 
 async function crawlCategoryPage(url: string): Promise<string[]> {
   try {
-    await sleep(DELAY_MS);
+    await sleep(DEFAULT_DELAY);
     const res = await fetch(url, {
       headers: { "User-Agent": UA },
       signal: AbortSignal.timeout(15_000),
@@ -126,6 +169,47 @@ async function crawlCategoryPage(url: string): Promise<string[]> {
   } catch {
     return [];
   }
+}
+
+// ── Category listing (product counts per category) ────────────────────────────
+// Fetched once before the sweep so we can skip fully-covered categories.
+// Non-fatal: if the listing call fails, returns an empty map and all categories
+// will be walked normally.
+
+async function fetchCategoryListing(
+  storeId: string,
+  rate:    RateState,
+): Promise<Map<string, number>> {
+  const counts = new Map<string, number>();
+  let url: string | null = `${SALLA_API}/categories?limit=50`;
+
+  while (url) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const data = await sallaFetch(storeId, url, rate) as Record<string, any>;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      for (const cat of ((data?.data as Record<string, any>[]) ?? [])) {
+        const id    = String(cat?.id ?? "");
+        const count = typeof cat?.product_count === "number" ? cat.product_count as number : -1;
+        if (id) counts.set(id, count);
+      }
+      url = (data?.cursor?.next as string | null) ?? null;
+    } catch {
+      break; // non-fatal; walk all categories
+    }
+  }
+
+  return counts;
+}
+
+// Count products we already hold that are tagged to a given catId.
+// Products store their category URL; the catId appears as /c{catId} in that URL.
+function heldForCat(products: Map<number, NormalizedProduct>, catId: string): number {
+  let n = 0;
+  for (const p of products.values()) {
+    if (p.category_url && extractCatId(p.category_url) === catId) n++;
+  }
+  return n;
 }
 
 // ── Description parser (§6) ───────────────────────────────────────────────────
@@ -213,16 +297,18 @@ async function walkCursor(
   products:   Map<number, NormalizedProduct>,
   progress:   WalkProgress,
   onProgress: (p: WalkProgress) => Promise<void>,
+  rate:       RateState,
+  stop:       StopSignal,
 ): Promise<number> {
   let added = 0;
   let nextUrl: string | null = startUrl;
 
   while (nextUrl) {
-    await sleep(DELAY_MS);
+    if (stop.stopped) break; // exit immediately when the sweep is aborted
     progress.request_count++;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const data  = (await sallaFetch(storeId, nextUrl)) as Record<string, any>;
+    const data  = (await sallaFetch(storeId, nextUrl, rate)) as Record<string, any>;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const items: Record<string, any>[] = (data?.data as Record<string, any>[]) ?? [];
 
@@ -252,6 +338,28 @@ async function walkCursor(
   return added;
 }
 
+// ── Concurrent pool ───────────────────────────────────────────────────────────
+
+async function runPool<T>(
+  items:       T[],
+  concurrency: number,
+  fn:          (item: T) => Promise<void>,
+  shouldStop?: () => boolean,
+): Promise<void> {
+  const queue = [...items];
+  async function worker() {
+    while (queue.length > 0) {
+      if (shouldStop?.()) break; // exit cleanly — don't drain remaining items
+      const item = queue.shift();
+      if (item === undefined) break;
+      await fn(item);
+    }
+  }
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, Math.max(items.length, 1)) }, worker),
+  );
+}
+
 // ── Main export ───────────────────────────────────────────────────────────────
 
 export interface WalkOpts {
@@ -263,6 +371,8 @@ export interface WalkOpts {
     walkedBrandIds: number[];
     knownProducts:  NormalizedProduct[];
   };
+  /** Inter-request delay in ms (default: 100). Auto-backs off on 429. */
+  delayMs?: number;
 }
 
 export async function walkStore(
@@ -272,6 +382,10 @@ export async function walkStore(
   opts:            WalkOpts = {},
 ): Promise<NormalizedProduct[]> {
   const { onFlush, resume } = opts;
+  const rate: RateState = {
+    delayMs: opts.delayMs ?? DEFAULT_DELAY,
+    minMs:   opts.delayMs ?? DEFAULT_DELAY,
+  };
 
   const products = new Map<number, NormalizedProduct>(
     resume?.knownProducts.map(p => [p.salla_id, p]) ?? [],
@@ -296,7 +410,12 @@ export async function walkStore(
   const walkedCatIds   = new Set<string>(resume?.walkedCatIds   ?? []);
   const walkedBrandIds = new Set<number>(resume?.walkedBrandIds ?? []);
 
-  // ── Incremental flush tracker ─────────────────────────────────────────────
+  // Shared stop signal: set .stopped = true whenever stoppedEarly fires.
+  // walkCursor checks this at the top of each page iteration so in-flight
+  // requests drain within one fetch round-trip (≤ delayMs + 30 s timeout).
+  const stopSignal: StopSignal = { stopped: false };
+
+  // ── Incremental flush ─────────────────────────────────────────────────────
   let lastFlushedCount = products.size;
   async function maybeFlush() {
     if (!onFlush) return;
@@ -309,9 +428,8 @@ export async function walkStore(
   }
 
   // ── Axis 1: source=latest ─────────────────────────────────────────────────
-  // Any HttpError here propagates straight to processJob (no partial to save yet).
   if (!resume) {
-    await walkCursor(storeId, buildProductsUrl("latest"), "latest", products, progress, onProgress);
+    await walkCursor(storeId, buildProductsUrl("latest"), "latest", products, progress, onProgress, rate, stopSignal);
     await maybeFlush();
   }
 
@@ -326,9 +444,13 @@ export async function walkStore(
     for (const u of subs) catUrlSet.add(u);
   }
 
+  // Fetch category product counts once — used to skip already-covered categories.
+  progress.phase = "prefetching-categories";
+  await onProgress({ ...progress });
+  const catProductCounts = await fetchCategoryListing(storeId, rate);
+
   // ── Axes 2–4: categories → brands, repeated ───────────────────────────────
 
-  let dryStreak = 0;
   let stoppedEarly = false;
 
   for (let round = 0; round < MAX_ROUNDS; round++) {
@@ -340,16 +462,35 @@ export async function walkStore(
       if (p.category_url) catUrlSet.add(p.category_url);
     }
 
-    // Update total known categories before this batch
     progress.category_total = countCatIds(catUrlSet);
 
-    // Walk unseen categories
+    // Build the list of unseen categories for this round.
+    // Mark them all as walked synchronously before any await to prevent
+    // concurrent workers from picking the same category.
+    const pending: { catId: string }[] = [];
     for (const catUrl of catUrlSet) {
-      if (stoppedEarly) break;
       const catId = extractCatId(catUrl);
       if (!catId || walkedCatIds.has(catId)) continue;
-      walkedCatIds.add(catId);
 
+      // Skip if the category's product count is already fully covered.
+      const expected = catProductCounts.get(catId) ?? -1;
+      if (expected >= 0 && heldForCat(products, catId) >= expected) {
+        walkedCatIds.add(catId); // mark as done so progress counts it
+        progress.category_index = walkedCatIds.size;
+        continue;
+      }
+
+      walkedCatIds.add(catId); // lock synchronously before pool starts
+      pending.push({ catId });
+    }
+
+    // Yield-rate tracking across the sweep
+    const sweepStartReqs = progress.request_count;
+    let sweepNew  = 0;
+    let catsCompleted = 0;
+    let dryStreak = 0;
+
+    await runPool(pending, CAT_CONCURRENCY, async ({ catId }) => {
       progress.categories_crawled = [...walkedCatIds];
       progress.category_index     = walkedCatIds.size;
       progress.category_total     = countCatIds(catUrlSet);
@@ -357,26 +498,32 @@ export async function walkStore(
       progress.walked_cat_ids     = [...walkedCatIds];
       await onProgress({ ...progress });
 
-      let added: number;
+      let added = 0;
       try {
         added = await walkCursor(
           storeId,
           buildProductsUrl("categories", [catId]),
           `category:${catId}`,
-          products, progress, onProgress,
+          products, progress, onProgress, rate, stopSignal,
         );
       } catch (e) {
-        if (e instanceof HttpError && e.status === 410) throw e; // store gone — propagate
-        // 422 or other transient error mid-sweep: record partial coverage and stop.
-        const reason = `Stopped at category ${walkedCatIds.size}/${progress.category_total ?? "?"} — ${e instanceof Error ? e.message : String(e)}`;
+        if (e instanceof HttpError && e.status === 410) throw e;
+        // Transient error mid-sweep: record partial coverage and stop.
+        const reason =
+          `Stopped at category ${walkedCatIds.size}/${progress.category_total ?? "?"} ` +
+          `— ${e instanceof Error ? e.message : String(e)}`;
         progress.stop_reason = reason;
         await onProgress({ ...progress });
-        stoppedEarly = true;
-        break;
+        stoppedEarly = true; stopSignal.stopped = true;
+        return;
       }
+
       roundAdded += added;
+      sweepNew   += added;
+      catsCompleted++;
       await maybeFlush();
 
+      // Dry-streak check (resets on any yield)
       if (added === 0) {
         dryStreak++;
         if (dryStreak >= STALE_LIMIT) {
@@ -385,17 +532,36 @@ export async function walkStore(
             `(${walkedCatIds.size} of ${progress.category_total} walked)`;
           progress.stop_reason = reason;
           await onProgress({ ...progress });
-          stoppedEarly = true;
-          break;
+          stoppedEarly = true; stopSignal.stopped = true;
         }
       } else {
         dryStreak = 0;
       }
-    }
+
+      // Yield-rate check: after YIELD_WINDOW categories walked this sweep,
+      // stop if new-products-per-request has dropped below YIELD_MIN_RATE.
+      if (!stoppedEarly && catsCompleted >= YIELD_WINDOW) {
+        const sweepReqs = progress.request_count - sweepStartReqs;
+        if (sweepReqs > 0) {
+          const yieldRate = sweepNew / sweepReqs;
+          if (yieldRate < YIELD_MIN_RATE) {
+            const reason =
+              `Yield rate ${yieldRate.toFixed(4)} new products/request ` +
+              `(${sweepNew} new / ${sweepReqs} requests over ${catsCompleted} categories) ` +
+              `fell below threshold ${YIELD_MIN_RATE} — stopping category sweep`;
+            progress.stop_reason = reason;
+            await onProgress({ ...progress });
+            stoppedEarly = true; stopSignal.stopped = true;
+          }
+        }
+      }
+    }, () => stoppedEarly);
 
     // Mine brand IDs from all found products
     const allBrandIds = new Set<number>(
-      [...products.values()].filter(p => p.brand_id !== null).map(p => p.brand_id as number),
+      [...products.values()]
+        .filter(p => p.brand_id !== null)
+        .map(p => p.brand_id as number),
     );
 
     for (const brandId of allBrandIds) {
@@ -406,17 +572,16 @@ export async function walkStore(
       progress.phase            = `brand:${brandId}`;
       await onProgress({ ...progress });
 
-      let added: number;
+      let added = 0;
       try {
         added = await walkCursor(
           storeId,
           buildProductsUrl("brands", [String(brandId)]),
           `brand:${brandId}`,
-          products, progress, onProgress,
+          products, progress, onProgress, rate, stopSignal,
         );
       } catch (e) {
         if (e instanceof HttpError && e.status === 410) throw e;
-        // Brand walk failed — log and continue to next brand.
         console.warn(`brand:${brandId} walk failed — ${e instanceof Error ? e.message : e}; skipping`);
         added = 0;
       }

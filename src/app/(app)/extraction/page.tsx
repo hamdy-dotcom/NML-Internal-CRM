@@ -4,6 +4,8 @@ import StatTile from '@/components/ui/StatTile';
 import ExtractionTable, { type ExtractionRow } from './ExtractionTable';
 import type { MerchantStage } from '@/lib/database.types';
 
+export const dynamic = 'force-dynamic';
+
 export default async function ExtractionPage() {
   const supabase = await createClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -11,68 +13,84 @@ export default async function ExtractionPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = adminClient as any;
 
+  // ── All fetches in parallel ───────────────────────────────────────────────────
   const [
-    { data: merchants },
-    { data: allJobs },
-    { data: merchantCounts },
-    { count: totalExtracted },
+    { count: hasSallaUrl },       // HEAD count — merchants that can be extracted
+    { count: fetchedCount },       // HEAD count — merchants with ≥1 product in CRM
+    { count: failedJobCount },     // HEAD count — jobs with status=error
+    { count: totalExtracted },     // HEAD count — total product rows
+    { data: productCounts },       // merchant_id + product_count from view (small dataset)
+    { data: merchants },           // full merchant list for the table
+    { data: allJobs },             // full job list for the table
   ] = await Promise.all([
-    db.from('merchants')
-      .select('id, store_name, store_url, salla_store_id, stage')
-      .order('store_name'),
+    // Stat card HEAD counts — zero rows transferred
+    supabase.from('merchants')
+      .select('*', { count: 'exact', head: true })
+      .or('store_url.not.is.null,salla_store_id.not.is.null'),
+    admin.from('v_merchant_product_counts')
+      .select('*', { count: 'exact', head: true }),
     db.from('salla_fetch_jobs')
-      .select('id, merchant_id, status, error, created_at, progress')
-      .order('created_at', { ascending: false }),
-    admin.from('v_merchant_product_counts').select('merchant_id, product_count'),
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'error'),
     admin.from('products')
       .select('*', { count: 'exact', head: true }),
+    // Product counts per merchant — used for the table display AND the ready anti-join
+    admin.from('v_merchant_product_counts')
+      .select('merchant_id, product_count')
+      .limit(10_000) as Promise<{ data: { merchant_id: string; product_count: number }[] | null }>,
+    // Table data — explicit high limits; default PostgREST cap is 1 000 rows
+    db.from('merchants')
+      .select('id, store_name, store_url, salla_store_id, stage')
+      .order('store_name')
+      .limit(10_000) as Promise<{ data: { id: string; store_name: string; store_url: string | null; salla_store_id: string | null; stage: MerchantStage }[] | null }>,
+    db.from('salla_fetch_jobs')
+      .select('id, merchant_id, status, error, created_at, progress')
+      .order('created_at', { ascending: false })
+      .limit(10_000) as Promise<{ data: { id: string; merchant_id: string; status: 'pending' | 'running' | 'done' | 'error'; error: string | null; created_at: string; progress: { products_found?: number } | null }[] | null }>,
   ]);
 
-  // Product count per merchant — one row per merchant from the aggregate view
-  const productCountByMerchant: Record<string, number> = {};
-  for (const p of (merchantCounts ?? []) as Array<{ merchant_id: string; product_count: number }>) {
-    productCountByMerchant[p.merchant_id] = p.product_count;
+  // Ready to extract: has salla URL and no products yet.
+  // = (merchants with salla url) − (merchants with salla url that already have products)
+  const productMerchantIds = (productCounts ?? []).map(r => r.merchant_id);
+  let hasSallaAndProducts = 0;
+  if (productMerchantIds.length > 0) {
+    const { count } = await supabase
+      .from('merchants')
+      .select('*', { count: 'exact', head: true })
+      .or('store_url.not.is.null,salla_store_id.not.is.null')
+      .in('id', productMerchantIds);
+    hasSallaAndProducts = count ?? 0;
+  }
+  const readyCount = (hasSallaUrl ?? 0) - hasSallaAndProducts;
+
+  // ── Build table rows ──────────────────────────────────────────────────────────
+  const productCountById: Record<string, number> = {};
+  for (const p of (productCounts ?? [])) {
+    productCountById[p.merchant_id] = p.product_count;
   }
 
-  // Latest salla_fetch_job per merchant (already ordered desc)
   const latestJobByMerchant: Record<string, ExtractionRow['latest_job']> = {};
-  for (const j of (allJobs ?? []) as Array<{
-    id: string; merchant_id: string;
-    status: 'pending' | 'running' | 'done' | 'error';
-    error: string | null; created_at: string;
-    progress: { products_found?: number } | null;
-  }>) {
+  for (const j of (allJobs ?? [])) {
     if (!latestJobByMerchant[j.merchant_id]) {
       latestJobByMerchant[j.merchant_id] = {
-        id: j.id,
-        status: j.status,
-        created_at: j.created_at,
+        id:             j.id,
+        status:         j.status,
+        created_at:     j.created_at,
         products_found: j.progress?.products_found ?? 0,
-        error: j.error,
+        error:          j.error,
       };
     }
   }
 
-  const rows: ExtractionRow[] = (
-    (merchants ?? []) as Array<{
-      id: string; store_name: string; store_url: string | null;
-      salla_store_id: string | null; stage: MerchantStage;
-    }>
-  ).map(m => ({
+  const rows: ExtractionRow[] = (merchants ?? []).map(m => ({
     id:             m.id,
     store_name:     m.store_name,
     store_url:      m.store_url,
     salla_store_id: m.salla_store_id,
     stage:          m.stage,
-    product_count:  productCountByMerchant[m.id] ?? 0,
+    product_count:  productCountById[m.id] ?? 0,
     latest_job:     latestJobByMerchant[m.id] ?? null,
   }));
-
-  // Stat tiles
-  const extractable  = rows.filter(r => r.store_url || r.salla_store_id);
-  const readyCount   = extractable.filter(r => !r.latest_job || r.latest_job.status === 'error').length;
-  const fetchedCount = rows.filter(r => r.latest_job?.status === 'done').length;
-  const failedCount  = rows.filter(r => r.latest_job?.status === 'error').length;
 
   return (
     <div style={{ paddingTop: 20 }}>
@@ -83,11 +101,31 @@ export default async function ExtractionPage() {
         </p>
       </div>
 
+      {/* All four stat tiles use server-side HEAD count queries — no row cap risk */}
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 20 }}>
-        <StatTile label="Ready to extract" value={readyCount} />
-        <StatTile label="Fetched"          value={fetchedCount} tint="green" />
-        <StatTile label="Failed"           value={failedCount}  tint="red" />
-        <StatTile label="Total extracted"  value={totalExtracted ?? 0} tint="blue" />
+        <StatTile
+          label="Ready to extract"
+          value={readyCount}
+          description="has Salla URL · no products in CRM yet"
+        />
+        <StatTile
+          label="Fetched"
+          value={fetchedCount ?? 0}
+          tint="green"
+          description="merchants with ≥1 product imported"
+        />
+        <StatTile
+          label="Failed"
+          value={failedJobCount ?? 0}
+          tint="red"
+          description="jobs with status = error"
+        />
+        <StatTile
+          label="Total extracted"
+          value={totalExtracted ?? 0}
+          tint="blue"
+          description="product rows across all merchants"
+        />
       </div>
 
       <div className="glass-panel" style={{ padding: 16 }}>
