@@ -92,21 +92,39 @@ async function processJob(
 
   await setJobStatus(jobId, "running", { store_id: null });
 
-  // Step 1: resolve store ID
-  const resolved = await resolveStore(storeUrl);
-  if (!resolved) {
-    // Could not find a store ID even after the custom-domain fallback.
-    // Mark as error so the team can investigate the URL.
-    await setJobStatus(jobId, "error", {
-      error: `Could not resolve Salla store ID from ${storeUrl}. ` +
-             `The store may use a custom domain — verify the URL or add the store-identifier manually.`,
-    });
-    return;
+  // Step 1: resolve store ID.
+  // Prefer salla_store_id already stored on the merchant — no page fetch needed.
+  // Fall back to scraping store_url only when it is absent.
+  const { data: merchantRow } = await db
+    .from("merchants")
+    .select("salla_store_id")
+    .eq("id", job.merchant_id)
+    .single();
+
+  const knownStoreId = (merchantRow as { salla_store_id: string | null } | null)?.salla_store_id ?? null;
+
+  let storeId: string;
+  let categoryUrls: string[];
+
+  if (knownStoreId) {
+    storeId      = knownStoreId;
+    categoryUrls = [];
+    console.log(`[${jobId}] Using stored salla_store_id: ${storeId}`);
+  } else {
+    const resolved = await resolveStore(storeUrl);
+    if (!resolved) {
+      await setJobStatus(jobId, "error", {
+        error: `Could not resolve Salla store ID from ${storeUrl}. ` +
+               `The store may use a custom domain — verify the URL or add the store-identifier manually.`,
+      });
+      return;
+    }
+    storeId      = resolved.storeId;
+    categoryUrls = resolved.categoryUrls;
+    console.log(`[${jobId}] Resolved store ID: ${storeId}, ${categoryUrls.length} category URLs`);
   }
 
-  const { storeId, categoryUrls } = resolved;
   await db.from("salla_fetch_jobs").update({ store_id: storeId }).eq("id", jobId);
-  console.log(`[${jobId}] Resolved store ID: ${storeId}, ${categoryUrls.length} category URLs`);
 
   // Progress callback — throttled to every 500 ms OR ≥25 new products
   let lastProgressSave = 0;
