@@ -8,21 +8,6 @@ const PAGE_SIZE = 100;
 // Merchant stages that qualify a product as "ready for shelf".
 export const SHELF_READY_STAGES = ["cta_completed", "onboarding", "active"] as const;
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-// Build a category/subcategory count map from a product row array.
-function buildCountMap<K extends string>(
-  rows: Record<string, unknown>[],
-  key: string,
-): Map<K, number> {
-  const map = new Map<K, number>();
-  for (const r of rows) {
-    const v = r[key] as K | null;
-    if (v) map.set(v, (map.get(v) ?? 0) + 1);
-  }
-  return map;
-}
-
 // GET /api/catalogue?search=&nml_category=&nml_subcategory=&merchant_ids=&page=0
 // GET /api/catalogue?type=nml-categories
 // GET /api/catalogue?type=nml-subcategories&category=X
@@ -33,27 +18,16 @@ export async function GET(req: NextRequest) {
     const type = searchParams.get("type");
 
     // ── NML category list ────────────────────────────────────────────────────
-    // Uses an inner join on merchants so the merchant ID list never goes into
-    // the URL (a large IN() filter can exceed server URL-length limits).
+    // RPC does GROUP BY in Postgres — avoids row-cap and URL-length issues.
     if (type === "nml-categories") {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (adminClient.from("products") as any)
-        .select("nml_category, merchants!inner(stage)")
-        .in("merchants.stage", SHELF_READY_STAGES)
-        .not("nml_category", "is", null)
-        .limit(50_000);
+      const { data, error } = await (adminClient as any).rpc("nml_catalogue_categories");
 
       if (error) console.error("[catalogue] nml-categories error:", error?.message);
 
-      const catMap = buildCountMap<string>(
-        (data ?? []) as Record<string, unknown>[],
-        "nml_category",
-      );
-
       return NextResponse.json({
-        categories: [...catMap.entries()]
-          .map(([value, count]) => ({ value, count }))
-          .sort((a, b) => b.count - a.count),
+        categories: ((data ?? []) as { nml_category: string; count: number }[])
+          .map(r => ({ value: r.nml_category, count: Number(r.count) })),
       });
     }
 
@@ -63,24 +37,13 @@ export async function GET(req: NextRequest) {
       if (!category) return NextResponse.json({ subcategories: [] });
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (adminClient.from("products") as any)
-        .select("nml_subcategory, merchants!inner(stage)")
-        .in("merchants.stage", SHELF_READY_STAGES)
-        .eq("nml_category", category)
-        .not("nml_subcategory", "is", null)
-        .limit(50_000);
+      const { data, error } = await (adminClient as any).rpc("nml_catalogue_subcategories", { cat: category });
 
       if (error) console.error("[catalogue] nml-subcategories error:", error?.message);
 
-      const subMap = buildCountMap<string>(
-        (data ?? []) as Record<string, unknown>[],
-        "nml_subcategory",
-      );
-
       return NextResponse.json({
-        subcategories: [...subMap.entries()]
-          .map(([value, count]) => ({ value, count }))
-          .sort((a, b) => b.count - a.count),
+        subcategories: ((data ?? []) as { nml_subcategory: string; count: number }[])
+          .map(r => ({ value: r.nml_subcategory, count: Number(r.count) })),
       });
     }
 
